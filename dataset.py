@@ -1,5 +1,6 @@
 import os
 import glob
+from turtle import pos
 import torch
 import torchvision
 import numpy as np
@@ -14,7 +15,8 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import ImageFile, Image
-from utils import read_tiff, get_data
+import h5py
+from utils import read_tiff, get_data, embs_to_syms, sym_to_ens
 from graph_construction import calcADJ
 from collections import defaultdict as dfd
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -25,10 +27,10 @@ class ViT_HER2ST(torch.utils.data.Dataset):
     def __init__(self,train=True,fold=0,r=4,flatten=True,ori=False,adj=False,prune='Grid',neighs=4):
         super(ViT_HER2ST, self).__init__()
         
-        self.cnt_dir = 'data/her2st/data/ST-cnts'
-        self.img_dir = 'data/her2st/data/ST-imgs'
-        self.pos_dir = 'data/her2st/data/ST-spotfiles'
-        self.lbl_dir = 'data/her2st/data/ST-pat/lbl'
+        self.cnt_dir = '../../data/her2st/data/ST-cnts'
+        self.img_dir = '../../data/her2st/data/ST-imgs'
+        self.pos_dir = '../../data/her2st/data/ST-spotfiles'
+        self.lbl_dir = '../../data/her2st/data/ST-pat/lbl'
         self.r = 224//r
 
         # gene_list = list(np.load('data/her_hvg.npy',allow_pickle=True))
@@ -62,27 +64,28 @@ class ViT_HER2ST(torch.utils.data.Dataset):
             'cancer in situ':3, 'connective tissue':4, 'adipose tissue':5, 'undetermined':-1
         }
         if not train and self.names[0] in ['A1','B1','C1','D1','E1','F1','G2','H1','J1']:
-            self.lbl_dict={i:self.get_lbl(i) for i in self.names}
+            self.lbl_dict={i:self.get_lbl(i) for i in self.names} # WHY DO WE GET THE LABEL ARRAYS FOR EVERY SAMPLE??? We only need one for LOO....
+            
             # self.label={i:m['label'].values for i,m in self.lbl_dict.items()}
             idx=self.meta_dict[self.names[0]].index
             lbl=self.lbl_dict[self.names[0]]
             lbl=lbl.loc[idx,:]['label'].values
             # lbl=torch.Tensor(list(map(lambda i:self.lbl2id[i],lbl)))
-            self.label[self.names[0]]=lbl
+            self.label[self.names[0]]=lbl # Only getting labels for the first sample ? Are we assuming LOO always?
         elif train:
-            for i in self.names:
-                idx=self.meta_dict[i].index
+            for i in self.names: # For each sample
+                idx=self.meta_dict[i].index # get the ids for this sample
                 if i in ['A1','B1','C1','D1','E1','F1','G2','H1','J1']:
-                    lbl=self.get_lbl(i)
+                    lbl=self.get_lbl(i) # Get the labels for this sample
                     lbl=lbl.loc[idx,:]['label'].values
                     lbl=torch.Tensor(list(map(lambda i:self.lbl2id[i],lbl)))
-                    self.label[i]=lbl
+                    self.label[i]=lbl # Assign the label in the label dictionary
                 else:
-                    self.label[i]=torch.full((len(idx),),-1)
+                    self.label[i]=torch.full((len(idx),),-1) # If not in one of the labelled samples, assign -1 (undetermined)
         self.gene_set = list(gene_list)
         self.exp_dict = {
-            i:scp.transform.log(scp.normalize.library_size_normalize(m[self.gene_set].values)) 
-            for i,m in self.meta_dict.items()
+            i:scp.transform.log(scp.normalize.library_size_normalize(m[self.gene_set].values))  
+            for i,m in self.meta_dict.items() # Each sample's expression, normalized and log-transformed. 
         }
         if self.ori:
             self.ori_dict = {i:m[self.gene_set].values for i,m in self.meta_dict.items()}
@@ -105,6 +108,7 @@ class ViT_HER2ST(torch.utils.data.Dataset):
         self.cumlen = np.cumsum(self.lengths)
         self.id2name = dict(enumerate(self.names))
         self.flatten=flatten
+        
     def __getitem__(self, index):
         ID=self.id2name[index]
         im = self.img_dict[ID]
@@ -114,8 +118,8 @@ class ViT_HER2ST(torch.utils.data.Dataset):
         if self.ori:
             oris = self.ori_dict[ID]
             sfs = self.counts_dict[ID]
-        centers = self.center_dict[ID]
-        loc = self.loc_dict[ID]
+        centers = self.center_dict[ID] # pixel locations
+        loc = self.loc_dict[ID] # array coordinates in "{x}x{y}" format
         adj = self.adj_dict[ID]
         patches = self.patch_dict[ID]
         positions = torch.LongTensor(loc)
@@ -185,6 +189,19 @@ class ViT_HER2ST(torch.utils.data.Dataset):
         return meta
 
     def get_lbl(self,name):
+        """
+        Loads and processes a labeled coordinates TSV file for a given sample name.
+        The method reads a TSV file containing labeled coordinates, rounds and converts
+        the 'x' and 'y' columns to integers, and creates a unique 'id' for each row in the
+        format '{x}x{y}'. It then sets this 'id' as the DataFrame index, and removes the
+        original 'pixel_x', 'pixel_y', 'x', and 'y' columns.
+        Args:
+            name (str): The sample name used to locate the labeled coordinates file.
+        Returns:
+            pandas.DataFrame: A DataFrame indexed by the generated 'id', with the original
+            coordinate columns removed.
+        """
+        
         # path = self.pos_dir+'/'+name+'_selection.tsv'
         path = self.lbl_dir+'/'+name+'_labeled_coordinates.tsv'
         df = pd.read_csv(path,sep='\t')
@@ -204,7 +221,7 @@ class ViT_HER2ST(torch.utils.data.Dataset):
         df.set_index('id',inplace=True)
         return df
 
-class ViT_SKIN(torch.utils.data.Dataset):
+class ViT_SKIN(torch.utils.data.Dataset):        
     """Some Information about ViT_SKIN"""
     def __init__(self,train=True,r=4,norm=False,fold=0,flatten=True,ori=False,adj=False,prune='NA',neighs=4):
         super(ViT_SKIN, self).__init__()
@@ -363,3 +380,201 @@ class ViT_SKIN(torch.utils.data.Dataset):
         for i in meta_dict.values():
             gene_set = gene_set&set(i.columns)
         return list(gene_set)
+        
+    
+class ViT_HEST1K(torch.utils.data.Dataset):
+    """Some Information about ViT_HEST1K (from AnnData objects)"""
+    def __init__(self, r=4, norm=True, gene_list = None, sample_ids= None, mode = 'test', fold=0, flatten=True, ori=False, adj=False, prune='NA', neighs=4):
+        """
+        adata_dict: dict mapping sample names to AnnData objects
+        gene_list: list of genes to use
+        """
+        super().__init__()
+
+        self.hest_path = "/work/bose_lab/tahsin/data/HEST"
+        self.norm=norm
+        # self.train = train
+        self.fold = fold
+        self.flatten = flatten
+        self.ori = ori
+        self.neighs = neighs
+        self.adj = adj
+        self.prune = prune
+        self.r = r
+        
+        
+        # TODO: if we need to match the genes to her2st?
+        gene_list = list(np.load('data/her_hvg_cut_1000.npy',allow_pickle=True))
+        self.gene_list = gene_list
+        self.ens_gene_list = sym_to_ens(gene_list)  # Convert to Ensembl IDs if needed
+        
+        # Load metadata
+        meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
+        meta_df = meta_df[meta_df['species'] == 'Homo sapiens']
+
+        # Split into train/test based on fold
+        if sample_ids is None:
+            # Use all available samples, split by fold
+            all_ids = meta_df['id'].tolist()
+            np.random.seed(42)
+            np.random.shuffle(all_ids)
+            
+            # Simple 80/20 split for each fold
+            split_idx = int(len(all_ids) * 0.8)
+            if mode == 'train':
+                self.sample_ids = all_ids[:split_idx]
+            elif mode == 'test':
+                self.sample_ids = all_ids[split_idx:]
+        else:
+            self.sample_ids = sample_ids
+
+         # Filter existing samples
+        self.sample_ids = [sid for sid in self.sample_ids 
+                          if os.path.exists(os.path.join(self.hest_path, "st", f"{sid}.h5ad"))]
+
+        print(f"HEST Dataset: {len(self.sample_ids)} samples ({'train' if mode == 'train' else 'test'})")
+        print(self.sample_ids)
+        # Load gene list (use HVG from first sample if not provided)
+        # if gene_list is None:
+        #     self.gene_list = self._get_common_hvg()
+        # else:
+        #     self.gene_list = gene_list
+            
+        print(f"Using {len(self.gene_list)} genes")
+        
+        # Store sample data
+        self.names = self.sample_ids
+        self.label = {}  # For clustering labels if needed
+        
+    def _get_common_hvg(self, n_genes=785):
+        """Get common highly variable genes across all samples. Would be used if 
+        gene_list is not provided (if we don't use the HER2ST list)"""
+        
+        all_genes = []
+        for sid in self.sample_ids[:5]: #TODO: confirm limiting to just first 5 is okay
+            adata_path = os.path.join(self.hest_path, "st", f"{sid}.h5ad")
+            if os.path.exists(adata_path):
+                adata = ad.read_h5ad(adata_path)
+                sc.pp.highly_variable_genes(adata, n_top_genes=n_genes, subset=True)
+                hvg = adata.var_names[adata.var['highly_variable']].index.tolist()
+                all_genes.extend(hvg)
+        gene_counts = pd.Series(all_genes).value_counts()
+        common_genes = gene_counts.head(n_genes).index.tolist()
+        return common_genes
+
+    def __getitem__(self, idx):
+        sample_id = self.sample_ids[idx]
+        
+        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+        adata = ad.read_h5ad(adata_path)
+        
+        if len(adata.var_names) == 0:
+            print(f"Warning: Sample {sample_id} has no genes. Skipping.")
+            return None
+        
+        if adata.var_names[0].startswith('ENSG'):
+            common_genes = list(set(self.ens_gene_list) & set(adata.var_names))
+            missing_genes = list(set(self.ens_gene_list) - set(adata.var_names))
+        else:
+            common_genes = list(set(self.gene_list) & set(adata.var_names))
+            missing_genes = list(set(self.gene_list) - set(adata.var_names))
+            
+        print(f"Sample {sample_id} has {len(common_genes)} common genes with the dataset")
+        
+        # Get Expression data for common genes
+        if hasattr(adata.X, "toarray"):
+            exps = adata[:, common_genes].X.toarray() 
+        else:
+            exps = adata[:, common_genes].X
+            
+        # Add zero columns for missing genes
+        zero_cols = np.zeros((exps.shape[0], len(missing_genes)))
+        exps = np.hstack([exps, zero_cols])
+        
+        # Reorder columns to match gene_list order
+        gene_order = {gene: idx for idx, gene in enumerate(common_genes + missing_genes)}
+        col_order = [gene_order[gene] for gene in self.gene_list]
+        exps = exps[:, col_order]
+        
+        #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
+        if self.norm: exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
+        
+        # Get spatial coordinates (are x and y, not pixel_x and pixel_y)
+        # if 'spatial' in adata.obsm:
+        #     pos = adata.obsm['spatial']
+        # else:
+        #     pos = adata.obs[['x', 'y']].values if 'x' in adata.obs.columns else np
+            
+        # Get array coordinates
+        pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+        pos_min = pos.min(axis=0)
+        pos_max = pos.max(axis=0)
+        
+        # Normalize positions to [0, 1] range
+        pos_normalized = (pos - pos_min) / (pos_max - pos_min + 1e-8)
+        # Scale to [0, 63]
+        pos_scaled = (pos_normalized * 63).astype(int)
+        # Ensure positions are within bounds
+        pos_scaled = np.clip(pos_scaled, 0, 63)
+         
+        
+        # Get pixel coordinates
+        centers = adata.obsm['spatial'] 
+
+        # Load Patches
+        patch_path = os.path.join(self.hest_path, "patches", f"{sample_id}.h5")
+        if os.path.exists(patch_path):
+            patches = self._load_patches(sample_id, adata.obs_names)
+            # Resize patches from 224x224 to 112x112 using interpolation
+            patches = F.interpolate(torch.from_numpy(patches), size=(112, 112), mode='bilinear', align_corners=True).numpy()
+        else:
+            patches = torch.randn(len(adata), 3, 224, 224)
+            
+        # Get adjacency matrix if required
+        if self.adj:
+            adj_matrix = calcADJ(pos, self.neighs, pruneTag=self.prune)
+        else:
+            adj_matrix = None
+            
+        patches = torch.FloatTensor(patches)
+        positions = torch.LongTensor(pos_scaled)  # Ensure positions are integers
+        expression = torch.FloatTensor(exps)
+        adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
+        
+        if self.adj:
+            return patches, positions, expression, adj_matrix, centers
+        else: return patches, positions, expression, centers
+
+
+    def __len__(self):
+        return len(self.sample_ids)
+
+    def _load_patches(self, sample_id, spot_names):
+        patches = []
+        path = os.path.join(self.hest_path, "patches", f"{sample_id}.h5")
+        
+        with h5py.File(path, 'r') as f:
+            images = f['img'][:]
+            barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
+            
+            barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
+            
+            
+            for spot in spot_names:
+                if spot in barcode_to_idx:
+                    idx = barcode_to_idx[spot]
+                    img = images[idx]
+                    # patches.append(images[idx])
+
+                    # Why convert to tensor and normalize??
+                    if len(img.shape) == 2:
+                        img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
+                    else:
+                        img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
+                        
+                    patches.append(img)
+                    
+                else:
+                    patches.append(np.zeros((3, 224, 224)))
+                    
+        return np.array(patches)

@@ -219,6 +219,8 @@ def normalize(
         adata = adata[:, adata.var.highly_variable]
 
     return adata
+
+
 if __name__ == '__main__':
 
     adata, img_path = get_data()
