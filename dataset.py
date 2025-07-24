@@ -16,11 +16,12 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import ImageFile, Image
 import h5py
-from utils import read_tiff, get_data, embs_to_syms, sym_to_ens
+# from utils import read_tiff, get_data, embs_to_syms, sym_to_ens
 from graph_construction import calcADJ
 from collections import defaultdict as dfd
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 Image.MAX_IMAGE_PIXELS = None
+from sym_convert import Symbol_Converter
 
 class ViT_HER2ST(torch.utils.data.Dataset):
     """Some Information about HER2ST"""
@@ -401,13 +402,18 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         self.adj = adj
         self.prune = prune
         self.r = r
+        self.symbol_converter = Symbol_Converter()  # Initialize symbol converter
         
-        
+        if self.ori:
+            self.ori_dict = {}
+            self.counts_dict = {}
+            
         # TODO: if we need to match the genes to her2st?
-        gene_list = list(np.load('data/her_hvg_cut_1000.npy',allow_pickle=True))
-        self.gene_list = gene_list
-        self.ens_gene_list = sym_to_ens(gene_list)  # Convert to Ensembl IDs if needed
-        
+        if mode == 'validation':
+            gene_list = list(np.load('data/her_hvg_cut_1000.npy',allow_pickle=True))
+            self.gene_list = gene_list
+            self.ens_gene_list = self.symbol_converter.convert_symbols_to_ensembl(gene_list, on_missing='keep')
+
         # Load metadata
         meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
         meta_df = meta_df[meta_df['species'] == 'Homo sapiens']
@@ -434,11 +440,12 @@ class ViT_HEST1K(torch.utils.data.Dataset):
 
         print(f"HEST Dataset: {len(self.sample_ids)} samples ({'train' if mode == 'train' else 'test'})")
         print(self.sample_ids)
+        
         # Load gene list (use HVG from first sample if not provided)
-        # if gene_list is None:
-        #     self.gene_list = self._get_common_hvg()
-        # else:
-        #     self.gene_list = gene_list
+        if gene_list is None:
+            self.gene_list = self._get_common_hvg()
+        else:
+            self.gene_list = gene_list
             
         print(f"Using {len(self.gene_list)} genes")
         
@@ -449,7 +456,6 @@ class ViT_HEST1K(torch.utils.data.Dataset):
     def _get_common_hvg(self, n_genes=785):
         """Get common highly variable genes across all samples. Would be used if 
         gene_list is not provided (if we don't use the HER2ST list)"""
-        
         all_genes = []
         for sid in self.sample_ids[:5]: #TODO: confirm limiting to just first 5 is okay
             adata_path = os.path.join(self.hest_path, "st", f"{sid}.h5ad")
@@ -461,52 +467,142 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         gene_counts = pd.Series(all_genes).value_counts()
         common_genes = gene_counts.head(n_genes).index.tolist()
         return common_genes
+    
+    def load_sample_with_unique_indices(self, sample_id):
+        """
+        Load a sample with guaranteed unique indices for each spot
+        
+        Args:
+            sample_id (str): ID of the sample to load
+            
+        Returns:
+            tuple: (patches, positions, expression, adj, centers, spot_ids)
+        """
+        # Load AnnData file
+        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+        adata = ad.read_h5ad(adata_path)
+        
+        # Create unique spot indices
+        n_spots = len(adata.obs_names)
+        spot_ids = pd.Index([f"spot_{i:05d}" for i in range(n_spots)], name='spot_id')
+        
+        # Update AnnData with unique indices
+        adata.obs.index = spot_ids
+        
+        # # Process the rest of the data as normal
+        if self.adj and self.ori:
+            patches, positions, expression, adj_matrix, ori, centers = self.process_sample(adata, sample_id)
+            return patches, positions, expression, adj_matrix, ori, centers, spot_ids
+        elif self.adj:
+            patches, positions, expression, adj_matrix, centers = self.process_sample(adata, sample_id)
+            return patches, positions, expression, adj_matrix, centers, spot_ids
+        elif self.ori:
+            patches, positions, expression, ori, centers = self.process_sample(adata, sample_id)
+            return patches, positions, expression, ori, centers, spot_ids
+        else:
+            patches, positions, expression, centers = self.process_sample(adata, sample_id)
+            return patches, positions, expression, centers, spot_ids
 
+        # return self.process_sample(adata, sample_id)
+    
     def __getitem__(self, idx):
         sample_id = self.sample_ids[idx]
+        # return self.load_sample_with_unique_indices(sample_id)
         
         adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
         adata = ad.read_h5ad(adata_path)
         
+        return self.process_sample(adata, sample_id)
+        
+    def process_sample(self, adata, sample_id):
+        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+        adata = ad.read_h5ad(adata_path)
+        # Inside ViT_HEST1K.__getitem__
+        print(f"\nLoading sample {sample_id}")
+        print(f"AnnData object:")
+        print(f"  obs_names unique: {adata.obs_names.is_unique}")
+        print(f"  var_names unique: {adata.var_names.is_unique}")
+        
         if len(adata.var_names) == 0:
             print(f"Warning: Sample {sample_id} has no genes. Skipping.")
             return None
+        # Debug print statements
+        print(f"\nProcessing sample {sample_id}")
+        # print(f"Gene list contains HPS6: {'HPS6' in self.gene_list}")
+        # print(f"AnnData contains HPS6: {'HPS6' in adata.var_names}")
         
-        if adata.var_names[0].startswith('ENSG'):
-            common_genes = list(set(self.ens_gene_list) & set(adata.var_names))
-            missing_genes = list(set(self.ens_gene_list) - set(adata.var_names))
-        else:
-            common_genes = list(set(self.gene_list) & set(adata.var_names))
-            missing_genes = list(set(self.gene_list) - set(adata.var_names))
-            
+        # Make var_names unique before any indexing
+        if not adata.var_names.is_unique:
+            print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
+            # Method 1: Make unique by appending _1, _2, etc. to duplicates
+            adata.var_names_make_unique()
+        
+        # Create dictionaries for faster lookups
+        gene_indices = {gene: idx for idx, gene in enumerate(adata.var_names)}
+        
+        # Initialize expression matrix with zeros (all genes from gene_list)
+        n_spots = adata.shape[0]
+        n_genes = len(self.gene_list)
+        exps = np.zeros((n_spots, n_genes))
+
+        common_genes, adata_common_labels = self.symbol_converter.get_common_genes(self.gene_list, adata.var_names)
+        missing_genes = self.symbol_converter.get_missing_genes(self.gene_list, adata.var_names)
+        
         print(f"Sample {sample_id} has {len(common_genes)} common genes with the dataset")
         
-        # Get Expression data for common genes
+        # Convert gene lists to regular Python strings
+        common_genes = [str(gene) for gene in common_genes]
+        adata_common_labels = [str(label) for label in adata_common_labels]
+        # missing_genes = [str(gene) for gene in missing_genes]
+        # gene_list = [str(gene) for gene in self.gene_list]
+        
+        # Create a boolean mask for gene selection
+        gene_mask = adata.var_names.isin(adata_common_labels)
         if hasattr(adata.X, "toarray"):
-            exps = adata[:, common_genes].X.toarray() 
+            exps = adata.X[:, gene_mask].toarray()
         else:
-            exps = adata[:, common_genes].X
+            exps = adata.X[:, gene_mask]
+    
+        # Verify we got the right number of genes
+        if exps.shape[1] != len(common_genes):
+            print(f"Warning: Expected {len(common_genes)} genes but got {exps.shape[1]}")
+            print(f"First few common genes: {common_genes[:5]}")
+            print(f"First few var names: {adata.var_names[:5]}")
             
         # Add zero columns for missing genes
         zero_cols = np.zeros((exps.shape[0], len(missing_genes)))
         exps = np.hstack([exps, zero_cols])
-        
+            
         # Reorder columns to match gene_list order
+        # Create a dictionary mapping genes to their positions
         gene_order = {gene: idx for idx, gene in enumerate(common_genes + missing_genes)}
+
+        # Create column order to match self.gene_list
         col_order = [gene_order[gene] for gene in self.gene_list]
+
+        # Reorder columns
         exps = exps[:, col_order]
+                
+        if not adata.obs_names.is_unique:
+            print("Warning: Found duplicate observation names!")        
+        ori_exps = exps.copy()  # Keep original for size factors if needed
         
         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-        if self.norm: exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
-        
-        # Get spatial coordinates (are x and y, not pixel_x and pixel_y)
-        # if 'spatial' in adata.obsm:
-        #     pos = adata.obsm['spatial']
-        # else:
-        #     pos = adata.obs[['x', 'y']].values if 'x' in adata.obs.columns else np
+        norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_exps))
             
         # Get array coordinates
-        pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+        # pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+        if 'array_row' in adata.obs and 'array_col' in adata.obs:
+            pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+        elif 'spatial' in adata.obsm:
+            pos = adata.obsm['spatial'].copy()
+        else:
+            print(f"Error: Sample {sample_id} does not have 'array_row' and 'array_col' in obs or 'spatial' in obsm.")
+            pos = np.zeros((adata.n_obs, 2), dtype=int)  
+            for i in range(adata.n_obs):
+                pos[i] = [i // 64, i % 64]  
+        
+        
         pos_min = pos.min(axis=0)
         pos_max = pos.max(axis=0)
         
@@ -516,10 +612,9 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         pos_scaled = (pos_normalized * 63).astype(int)
         # Ensure positions are within bounds
         pos_scaled = np.clip(pos_scaled, 0, 63)
-         
         
         # Get pixel coordinates
-        centers = adata.obsm['spatial'] 
+        centers = adata.obsm['spatial']
 
         # Load Patches
         patch_path = os.path.join(self.hest_path, "patches", f"{sample_id}.h5")
@@ -536,13 +631,29 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         else:
             adj_matrix = None
             
+        # Get original counts and size factors if requested
+        if self.ori:
+            ori_counts = ori_exps
+            
+            # Calculate size factors
+            n_counts = ori_counts.sum(1)
+            sf = n_counts / np.median(n_counts)
+            
+            # Store in dictionaries
+            self.ori_dict[sample_id] = ori_counts
+            self.counts_dict[sample_id] = sf    
+        
         patches = torch.FloatTensor(patches)
         positions = torch.LongTensor(pos_scaled)  # Ensure positions are integers
         expression = torch.FloatTensor(exps)
         adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
         
-        if self.adj:
+        if self.adj and self.ori:
+            return patches, positions, expression, adj_matrix, [torch.FloatTensor(self.ori_dict[sample_id]), torch.FloatTensor(self.counts_dict[sample_id])], centers
+        elif self.adj:
             return patches, positions, expression, adj_matrix, centers
+        elif self.ori:
+            return patches, positions, expression, [torch.FloatTensor(self.ori_dict[sample_id]), torch.FloatTensor(self.counts_dict[sample_id])], centers
         else: return patches, positions, expression, centers
 
 

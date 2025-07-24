@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import pandas as pd
 import scanpy as sc
 import anndata as ad
 from tqdm import tqdm
@@ -9,8 +10,35 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score as ari_score
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 def pk_load(fold,mode='train', sample_ids=None,flatten=False,dataset='her2st',r=4,ori=True,adj=True,prune='Grid',neighs=4):
-    assert dataset in ['her2st','cscc','hest1k']
-    if dataset=='her2st':
+    assert dataset in ['her2st', 'cscc', 'hest1k']
+    
+    # Debug dataset parameters
+    print(f"\nLoading dataset with parameters:")
+    print(f"  Dataset: {dataset}")
+    print(f"  Mode: {mode}")
+    print(f"  Sample IDs: {sample_ids}")
+    print(f"  Fold: {fold}")
+    
+    if dataset == 'hest1k':
+        dataset = ViT_HEST1K(
+            mode=mode, 
+            fold=fold,
+            flatten=flatten,
+            sample_ids=sample_ids,
+            ori=ori,
+            neighs=neighs,
+            adj=adj,
+            prune=prune,
+            r=r
+        )
+        # Verify dataset loading
+        print(f"\nDataset loaded:")
+        print(f"  Length: {len(dataset)}")
+        if hasattr(dataset, 'adata'):
+            print(f"  AnnData shape: {dataset.adata.shape}")
+            print(f"  Index unique: {dataset.adata.obs_names.is_unique}")
+    
+    elif dataset=='her2st':
         dataset = ViT_HER2ST(
             train=(mode=='train'),fold=fold,flatten=flatten,
             ori=ori,neighs=neighs,adj=adj,prune=prune,r=r
@@ -20,71 +48,123 @@ def pk_load(fold,mode='train', sample_ids=None,flatten=False,dataset='her2st',r=
             train=(mode=='train'),fold=fold,flatten=flatten,
             ori=ori,neighs=neighs,adj=adj,prune=prune,r=r
         )
-    elif dataset=='hest1k':
-        dataset = ViT_HEST1K(
-            mode=mode,fold=fold,flatten=flatten,sample_ids=sample_ids,
-            ori=ori,neighs=neighs,adj=adj,prune=prune,r=r
-        )
+    # elif dataset=='hest1k':
+    #     dataset = ViT_HEST1K(
+    #         mode=mode,fold=fold,flatten=flatten,sample_ids=sample_ids,
+    #         ori=ori,neighs=neighs,adj=adj,prune=prune,r=r
+    #     )
     return dataset
-def test(model,test,device='cuda'):
-    """
-    Evaluates a model on test data and returns predicted and ground truth AnnData objects.
-    Args:
-        model: Neural network model to evaluate
-        test: Test data loader containing patches, positions, expressions, and adjacency matrices
-        device (str, optional): Device to run model on. Defaults to 'cuda'.
-    Returns:
-        tuple: Contains two AnnData objects:
-            - adata: AnnData object with predicted expressions and spatial coordinates
-            - adata_gt: AnnData object with ground truth expressions and spatial coordinates
-    Note:
-        The function runs in evaluation mode with no gradient computation.
-        The spatial coordinates are stored in the 'spatial' key of obsm.
-    """
-    
-    model=model.to(device)
+def test(model, test, device='cuda'):
+    model = model.to(device)
     model.eval()
     
-    # Get model embedding limits
-    # max_x = model.x_embed.num_embeddings
-    # max_y = model.y_embed.num_embeddings
-    # print(f"Model expects positions in range [0, {max_x-1}] x [0, {max_y-1}]")
+    preds = []
+    ct = []
+    gt = []
     
-    preds=[]
-    ct=[]
-    gt=[]
-    loss=0
+    # Debug: Print dataloader size
+    print(f"Number of batches in dataloader: {len(test)}")
+    
     with torch.no_grad():
-        for i, (patch, position, exp, adj, *_, center) in enumerate(tqdm(test)):
+        for i, (patch, position, exp, *adj_ori, center) in enumerate(tqdm(test)):
             print(f"Batch {i}: patch shape = {patch.shape}")
+            if len(adj_ori) > 0:
+                adj = adj_ori[0]
+            else:
+                adj = None
             patch, position, adj = patch.to(device), position.to(device), adj.to(device).squeeze(0)
             try:
                 pred = model(patch, position, adj)[0]
+                preds.append(pred.squeeze().cpu().numpy())
+                ct.append(center.squeeze().cpu().numpy())
+                gt.append(exp.squeeze().cpu().numpy())
             except RuntimeError as e:
                 print(f"Error at model forward pass:")
                 print(f"patch final shape: {patch.shape}")
                 print(f"position final shape: {position.shape}")
                 print(f"adj final shape: {adj.shape}")
                 raise e
-            # pred = model(patch, position, adj)[0]
-            preds.append(pred.squeeze().cpu().numpy())
-            ct.append(center.squeeze().cpu().numpy())
-            gt.append(exp.squeeze().cpu().numpy())
-    # Convert lists to NumPy arrays
+
+    if len(preds) == 0:
+        raise ValueError("No predictions collected - check if dataloader is empty")
+
+    # Convert lists to arrays
     preds_array = np.concatenate(preds, axis=0) if len(preds) > 1 else preds[0]
     ct_array = np.concatenate(ct, axis=0) if len(ct) > 1 else ct[0]
     gt_array = np.concatenate(gt, axis=0) if len(gt) > 1 else gt[0]
     
-    print(f"Final shapes - preds: {preds_array.shape}, ct: {ct_array.shape}, gt: {gt_array.shape}")
+    # print(f"Final shapes - preds: {preds_array.shape}, ct: {ct_array.shape}, gt: {gt_array.shape}")
+
+    # Create unique indices for AnnData objects
+    n_spots = preds_array.shape[0]
+    spot_ids = [f"spot_{i}" for i in range(n_spots)]
     
-    # Create AnnData objects with arrays, not lists
-    adata = ad.AnnData(preds_array)
-    adata.obsm['spatial'] = ct_array
+    # Create AnnData objects with explicit indices
+    # adata = ad.AnnData(
+    #     X=preds_array,
+    #     obs=pd.DataFrame(index=spot_ids),
+    #     dtype=np.float32
+    # )
+    # adata.obsm['spatial'] = ct_array
     
-    adata_gt = ad.AnnData(gt_array)
-    adata_gt.obsm['spatial'] = ct_array
+    # adata_gt = ad.AnnData(
+    #     X=gt_array,
+    #     obs=pd.DataFrame(index=pd.Index(spot_ids, name='spot_id').copy()),
+    #     dtype=np.float32
+    # )
+    # adata_gt.obsm['spatial'] = ct_array
+    
+    # return adata, adata_gt
+    # Extract spatial coordinates if they exist
+    if len(ct_array.shape) == 2 and ct_array.shape[1] >= 2:
+        array_row = ct_array[:, 0]
+        array_col = ct_array[:, 1]
+        
+        # Create observation DataFrame with required columns
+        obs_df = pd.DataFrame({
+            'array_row': array_row,
+            'array_col': array_col
+        }, index=spot_ids)
+    else:
+        # Just create index without spatial coords
+        obs_df = pd.DataFrame(index=spot_ids)
+    
+    # Create AnnData objects with proper observation dataframes
+    try:
+        adata = ad.AnnData(
+            X=preds_array,
+            obs=obs_df,
+            dtype=np.float32
+        )
+        
+        # Store the full spatial coordinates in obsm
+        adata.obsm['spatial'] = ct_array
+        
+        # Create separate obs_df for ground truth to avoid shared references
+        obs_df_gt = obs_df.copy()
+        
+        adata_gt = ad.AnnData(
+            X=gt_array,
+            obs=obs_df_gt,
+            dtype=np.float32
+        )
+        adata_gt.obsm['spatial'] = ct_array
+        
+        # Verify indices are unique
+        print(f"Pred index is unique: {adata.obs.index.is_unique}")
+        print(f"GT index is unique: {adata_gt.obs.index.is_unique}")
+        
+    except Exception as e:
+        print(f"Error creating AnnData objects: {str(e)}")
+        # Create minimal AnnData as fallback
+        adata = ad.AnnData(X=preds_array, dtype=np.float32)
+        adata_gt = ad.AnnData(X=gt_array, dtype=np.float32)
+        # Add spatial info to obsm directly
+        adata.obsm['spatial'] = ct_array
+        adata_gt.obsm['spatial'] = ct_array
     
     return adata, adata_gt
+
 def cluster(adata,label):
     idx=label!='undetermined'
     tmp=adata[idx]
