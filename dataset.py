@@ -16,6 +16,7 @@ import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import ImageFile, Image
 import h5py
+from pathlib import Path
 # from utils import read_tiff, get_data, embs_to_syms, sym_to_ens
 from graph_construction import calcADJ
 from collections import defaultdict as dfd
@@ -385,17 +386,18 @@ class ViT_SKIN(torch.utils.data.Dataset):
     
 class ViT_HEST1K(torch.utils.data.Dataset):
     """Some Information about ViT_HEST1K (from AnnData objects)"""
-    def __init__(self, r=4, norm=True, gene_list = None, sample_ids= None, mode = 'test', fold=0, flatten=True, ori=False, adj=False, prune='NA', neighs=4):
+    def __init__(self, r=4, norm=True, gene_list= None, mode = 'test', flatten=True, ori=False, adj=False, prune='NA', neighs=4):
         """
         adata_dict: dict mapping sample names to AnnData objects
         gene_list: list of genes to use
         """
         super().__init__()
 
-        self.hest_path = "/work/bose_lab/tahsin/data/HEST"
+        self.hest_path = Path("/work/bose_lab/tahsin/data/HEST")
+        self.patch_path = Path("../../../data/HERST_preprocess/patches_112x112")
+        self.processed_path = Path("../../data/HERST_preprocess")
         self.norm=norm
-        # self.train = train
-        self.fold = fold
+        self.mode = mode
         self.flatten = flatten
         self.ori = ori
         self.neighs = neighs
@@ -408,128 +410,82 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             self.ori_dict = {}
             self.counts_dict = {}
             
-        # TODO: if we need to match the genes to her2st?
+        if gene_list == "3CA":
+            self.processed_path = self.processed_path / '3CA_genes'
+        elif gene_list == "Hallmark":
+            self.processed_path = self.processed_path / 'Hallmark_genes'
+        
         if mode == 'validation':
-            gene_list = list(np.load('data/her_hvg_cut_1000.npy',allow_pickle=True))
-            self.gene_list = gene_list
-            self.ens_gene_list = self.symbol_converter.convert_symbols_to_ensembl(gene_list, on_missing='keep')
+            self.processed_path = self.processed_path / 'val'
+        elif mode == 'test':
+            self.processed_path = self.processed_path / 'test'
+        else:
+            self.processed_path = self.processed_path / 'train'
+
+        self.sample_ids = [file.stem.split('_')[0] for file in self.processed_path.glob("*.h5ad")]
 
         # Load metadata
-        meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
-        meta_df = meta_df[meta_df['species'] == 'Homo sapiens']
-
-        # Split into train/test based on fold
-        if sample_ids is None:
-            # Use all available samples, split by fold
-            all_ids = meta_df['id'].tolist()
-            np.random.seed(42)
-            np.random.shuffle(all_ids)
-            
-            # Simple 80/20 split for each fold
-            split_idx = int(len(all_ids) * 0.8)
-            if mode == 'train':
-                self.sample_ids = all_ids[:split_idx]
-            elif mode == 'test':
-                self.sample_ids = all_ids[split_idx:]
-        else:
-            self.sample_ids = sample_ids
-
-         # Filter existing samples
-        self.sample_ids = [sid for sid in self.sample_ids 
-                          if os.path.exists(os.path.join(self.hest_path, "st", f"{sid}.h5ad"))]
-
-        print(f"HEST Dataset: {len(self.sample_ids)} samples ({'train' if mode == 'train' else 'test'})")
-        print(self.sample_ids)
+        # meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
+        # meta_df = meta_df[meta_df['species'] == 'Homo sapiens']
         
-        # Load gene list (use HVG from first sample if not provided)
-        if gene_list is None:
-            self.gene_list = self._get_common_hvg()
-        else:
-            self.gene_list = gene_list
-            
-        print(f"Using {len(self.gene_list)} genes")
+         # Filter existing samples
+        # self.sample_ids = [file.name.split('_')[0] for file in self.processed_path.glob("*")]
         
         # Store sample data
-        self.names = self.sample_ids
-        self.label = {}  # For clustering labels if needed
+        # self.names = self.sample_ids
+        # self.label = {}  # For clustering labels if needed
         
-    def _get_common_hvg(self, n_genes=785):
-        """Get common highly variable genes across all samples. Would be used if 
-        gene_list is not provided (if we don't use the HER2ST list)"""
-        all_genes = []
-        for sid in self.sample_ids[:5]: #TODO: confirm limiting to just first 5 is okay
-            adata_path = os.path.join(self.hest_path, "st", f"{sid}.h5ad")
-            if os.path.exists(adata_path):
-                adata = ad.read_h5ad(adata_path)
-                sc.pp.highly_variable_genes(adata, n_top_genes=n_genes, subset=True)
-                hvg = adata.var_names[adata.var['highly_variable']].index.tolist()
-                all_genes.extend(hvg)
-        gene_counts = pd.Series(all_genes).value_counts()
-        common_genes = gene_counts.head(n_genes).index.tolist()
-        return common_genes
-    
-    def load_sample_with_unique_indices(self, sample_id):
-        """
-        Load a sample with guaranteed unique indices for each spot
+
+    # def load_sample_with_unique_indices(self, sample_id):
+    #     """
+    #     Load a sample with guaranteed unique indices for each spot
         
-        Args:
-            sample_id (str): ID of the sample to load
+    #     Args:
+    #         sample_id (str): ID of the sample to load
             
-        Returns:
-            tuple: (patches, positions, expression, adj, centers, spot_ids)
-        """
-        # Load AnnData file
-        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
-        adata = ad.read_h5ad(adata_path)
+    #     Returns:
+    #         tuple: (patches, positions, expression, adj, centers, spot_ids)
+    #     """
+    #     # Load AnnData file
+    #     adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+    #     adata = ad.read_h5ad(adata_path)
         
-        # Create unique spot indices
-        n_spots = len(adata.obs_names)
-        spot_ids = pd.Index([f"spot_{i:05d}" for i in range(n_spots)], name='spot_id')
+    #     # Create unique spot indices
+    #     n_spots = len(adata.obs_names)
+    #     spot_ids = pd.Index([f"spot_{i:05d}" for i in range(n_spots)], name='spot_id')
         
-        # Update AnnData with unique indices
-        adata.obs.index = spot_ids
+    #     # Update AnnData with unique indices
+    #     adata.obs.index = spot_ids
         
-        # # Process the rest of the data as normal
-        if self.adj and self.ori:
-            patches, positions, expression, adj_matrix, ori, centers = self.process_sample(adata, sample_id)
-            return patches, positions, expression, adj_matrix, ori, centers, spot_ids
-        elif self.adj:
-            patches, positions, expression, adj_matrix, centers = self.process_sample(adata, sample_id)
-            return patches, positions, expression, adj_matrix, centers, spot_ids
-        elif self.ori:
-            patches, positions, expression, ori, centers = self.process_sample(adata, sample_id)
-            return patches, positions, expression, ori, centers, spot_ids
-        else:
-            patches, positions, expression, centers = self.process_sample(adata, sample_id)
-            return patches, positions, expression, centers, spot_ids
+    #     # # Process the rest of the data as normal
+    #     if self.adj and self.ori:
+    #         patches, positions, expression, adj_matrix, ori, centers = self.process_sample(adata, sample_id)
+    #         return patches, positions, expression, adj_matrix, ori, centers, spot_ids
+    #     elif self.adj:
+    #         patches, positions, expression, adj_matrix, centers = self.process_sample(adata, sample_id)
+    #         return patches, positions, expression, adj_matrix, centers, spot_ids
+    #     elif self.ori:
+    #         patches, positions, expression, ori, centers = self.process_sample(adata, sample_id)
+    #         return patches, positions, expression, ori, centers, spot_ids
+    #     else:
+    #         patches, positions, expression, centers = self.process_sample(adata, sample_id)
+    #         return patches, positions, expression, centers, spot_ids
 
         # return self.process_sample(adata, sample_id)
     
     def __getitem__(self, idx):
         sample_id = self.sample_ids[idx]
-        # return self.load_sample_with_unique_indices(sample_id)
         
-        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+        adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
         adata = ad.read_h5ad(adata_path)
         
         return self.process_sample(adata, sample_id)
         
     def process_sample(self, adata, sample_id):
-        adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
+        adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
         adata = ad.read_h5ad(adata_path)
-        # Inside ViT_HEST1K.__getitem__
-        print(f"\nLoading sample {sample_id}")
-        print(f"AnnData object:")
-        print(f"  obs_names unique: {adata.obs_names.is_unique}")
-        print(f"  var_names unique: {adata.var_names.is_unique}")
         
-        if len(adata.var_names) == 0:
-            print(f"Warning: Sample {sample_id} has no genes. Skipping.")
-            return None
-        # Debug print statements
         print(f"\nProcessing sample {sample_id}")
-        # print(f"Gene list contains HPS6: {'HPS6' in self.gene_list}")
-        # print(f"AnnData contains HPS6: {'HPS6' in adata.var_names}")
         
         # Make var_names unique before any indexing
         if not adata.var_names.is_unique:
@@ -537,58 +493,57 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             # Method 1: Make unique by appending _1, _2, etc. to duplicates
             adata.var_names_make_unique()
         
-        # Create dictionaries for faster lookups
-        gene_indices = {gene: idx for idx, gene in enumerate(adata.var_names)}
-        
         # Initialize expression matrix with zeros (all genes from gene_list)
-        n_spots = adata.shape[0]
-        n_genes = len(self.gene_list)
-        exps = np.zeros((n_spots, n_genes))
-
-        common_genes, adata_common_labels = self.symbol_converter.get_common_genes(self.gene_list, adata.var_names)
-        missing_genes = self.symbol_converter.get_missing_genes(self.gene_list, adata.var_names)
+        # n_spots = adata.shape[0]
+        # n_genes = len(self.gene_list)
+        exps = adata.X
         
-        print(f"Sample {sample_id} has {len(common_genes)} common genes with the dataset")
+        # exps = np.zeros((n_spots, n_genes))
+
+        # common_genes, adata_common_labels = self.symbol_converter.get_common_genes(self.gene_list, adata.var_names)
+        # missing_genes = self.symbol_converter.get_missing_genes(self.gene_list, adata.var_names)
+        
+        # print(f"Sample {sample_id} has {len(common_genes)} common genes with the dataset")
         
         # Convert gene lists to regular Python strings
-        common_genes = [str(gene) for gene in common_genes]
-        adata_common_labels = [str(label) for label in adata_common_labels]
+        # common_genes = [str(gene) for gene in common_genes]
+        # adata_common_labels = [str(label) for label in adata_common_labels]
         # missing_genes = [str(gene) for gene in missing_genes]
         # gene_list = [str(gene) for gene in self.gene_list]
         
         # Create a boolean mask for gene selection
-        gene_mask = adata.var_names.isin(adata_common_labels)
-        if hasattr(adata.X, "toarray"):
-            exps = adata.X[:, gene_mask].toarray()
-        else:
-            exps = adata.X[:, gene_mask]
+        # gene_mask = adata.var_names.isin(adata_common_labels)
+        # if hasattr(adata.X, "toarray"):
+        #     exps = adata.X[:, gene_mask].toarray()
+        # else:
+        #     exps = adata.X[:, gene_mask]
     
         # Verify we got the right number of genes
-        if exps.shape[1] != len(common_genes):
-            print(f"Warning: Expected {len(common_genes)} genes but got {exps.shape[1]}")
-            print(f"First few common genes: {common_genes[:5]}")
-            print(f"First few var names: {adata.var_names[:5]}")
+        # if exps.shape[1] != len(common_genes):
+        #     print(f"Warning: Expected {len(common_genes)} genes but got {exps.shape[1]}")
+        #     print(f"First few common genes: {common_genes[:5]}")
+        #     print(f"First few var names: {adata.var_names[:5]}")
             
         # Add zero columns for missing genes
-        zero_cols = np.zeros((exps.shape[0], len(missing_genes)))
-        exps = np.hstack([exps, zero_cols])
+        # zero_cols = np.zeros((exps.shape[0], len(missing_genes)))
+        # exps = np.hstack([exps, zero_cols])
             
         # Reorder columns to match gene_list order
         # Create a dictionary mapping genes to their positions
-        gene_order = {gene: idx for idx, gene in enumerate(common_genes + missing_genes)}
+        # gene_order = {gene: idx for idx, gene in enumerate(common_genes + missing_genes)}
 
         # Create column order to match self.gene_list
-        col_order = [gene_order[gene] for gene in self.gene_list]
+        # col_order = [gene_order[gene] for gene in self.gene_list]
 
         # Reorder columns
-        exps = exps[:, col_order]
+        # exps = exps[:, col_order]
                 
-        if not adata.obs_names.is_unique:
-            print("Warning: Found duplicate observation names!")        
-        ori_exps = exps.copy()  # Keep original for size factors if needed
+        # if not adata.obs_names.is_unique:
+        #     print("Warning: Found duplicate observation names!")        
+        ori_counts = exps.copy()  # Keep original for size factors if needed
         
         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-        norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_exps))
+        norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
             
         # Get array coordinates
         # pos = adata.obs[['array_row', 'array_col']].values.astype(int)
@@ -602,10 +557,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             for i in range(adata.n_obs):
                 pos[i] = [i // 64, i % 64]  
         
-        
         pos_min = pos.min(axis=0)
         pos_max = pos.max(axis=0)
         
+        # Unique to HIS2ST - expects positions in [0, 63] range ?
         # Normalize positions to [0, 1] range
         pos_normalized = (pos - pos_min) / (pos_max - pos_min + 1e-8)
         # Scale to [0, 63]
@@ -617,13 +572,11 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         centers = adata.obsm['spatial']
 
         # Load Patches
-        patch_path = os.path.join(self.hest_path, "patches", f"{sample_id}.h5")
+        patch_path = os.path.join(self.patch_path, f"{sample_id}.h5")
         if os.path.exists(patch_path):
             patches = self._load_patches(sample_id, adata.obs_names)
-            # Resize patches from 224x224 to 112x112 using interpolation
-            patches = F.interpolate(torch.from_numpy(patches), size=(112, 112), mode='bilinear', align_corners=True).numpy()
         else:
-            patches = torch.randn(len(adata), 3, 224, 224)
+            patches = torch.randn(len(adata), 3, 112, 112) # Uses 112 x 112 random patches if none found
             
         # Get adjacency matrix if required
         if self.adj:
@@ -633,8 +586,6 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             
         # Get original counts and size factors if requested
         if self.ori:
-            ori_counts = ori_exps
-            
             # Calculate size factors
             n_counts = ori_counts.sum(1)
             sf = n_counts / np.median(n_counts)
@@ -662,7 +613,7 @@ class ViT_HEST1K(torch.utils.data.Dataset):
 
     def _load_patches(self, sample_id, spot_names):
         patches = []
-        path = os.path.join(self.hest_path, "patches", f"{sample_id}.h5")
+        path = os.path.join(self.patch_path, f"{sample_id}.h5")
         
         with h5py.File(path, 'r') as f:
             images = f['img'][:]
@@ -682,10 +633,8 @@ class ViT_HEST1K(torch.utils.data.Dataset):
                         img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
                     else:
                         img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
-                        
                     patches.append(img)
-                    
                 else:
-                    patches.append(np.zeros((3, 224, 224)))
+                    patches.append(np.zeros((3, 112, 112)))
                     
         return np.array(patches)
