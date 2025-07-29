@@ -386,7 +386,7 @@ class ViT_SKIN(torch.utils.data.Dataset):
     
 class ViT_HEST1K(torch.utils.data.Dataset):
     """Some Information about ViT_HEST1K (from AnnData objects)"""
-    def __init__(self, r=4, norm=True, gene_list= None, mode = 'test', flatten=True, ori=False, adj=False, prune='NA', neighs=4):
+    def __init__(self, r=4, norm=True, gene_list= "3CA", mode = 'test', flatten=True, ori=False, adj=False, prune='NA', neighs=4):
         """
         adata_dict: dict mapping sample names to AnnData objects
         gene_list: list of genes to use
@@ -421,8 +421,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             self.processed_path = self.processed_path / 'test'
         else:
             self.processed_path = self.processed_path / 'train'
+        print(f"Found processed path: {self.processed_path} with {len(list(self.processed_path.glob('*.h5ad')))} samples")
 
         self.sample_ids = [file.stem.split('_')[0] for file in self.processed_path.glob("*.h5ad")]
+        print(f"Found {len(self.sample_ids)} samples ids.")
 
         # Load metadata
         # meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
@@ -434,54 +436,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         # Store sample data
         # self.names = self.sample_ids
         # self.label = {}  # For clustering labels if needed
-        
 
-    # def load_sample_with_unique_indices(self, sample_id):
-    #     """
-    #     Load a sample with guaranteed unique indices for each spot
-        
-    #     Args:
-    #         sample_id (str): ID of the sample to load
-            
-    #     Returns:
-    #         tuple: (patches, positions, expression, adj, centers, spot_ids)
-    #     """
-    #     # Load AnnData file
-    #     adata_path = os.path.join(self.hest_path, "st", f"{sample_id}.h5ad")
-    #     adata = ad.read_h5ad(adata_path)
-        
-    #     # Create unique spot indices
-    #     n_spots = len(adata.obs_names)
-    #     spot_ids = pd.Index([f"spot_{i:05d}" for i in range(n_spots)], name='spot_id')
-        
-    #     # Update AnnData with unique indices
-    #     adata.obs.index = spot_ids
-        
-    #     # # Process the rest of the data as normal
-    #     if self.adj and self.ori:
-    #         patches, positions, expression, adj_matrix, ori, centers = self.process_sample(adata, sample_id)
-    #         return patches, positions, expression, adj_matrix, ori, centers, spot_ids
-    #     elif self.adj:
-    #         patches, positions, expression, adj_matrix, centers = self.process_sample(adata, sample_id)
-    #         return patches, positions, expression, adj_matrix, centers, spot_ids
-    #     elif self.ori:
-    #         patches, positions, expression, ori, centers = self.process_sample(adata, sample_id)
-    #         return patches, positions, expression, ori, centers, spot_ids
-    #     else:
-    #         patches, positions, expression, centers = self.process_sample(adata, sample_id)
-    #         return patches, positions, expression, centers, spot_ids
-
-        # return self.process_sample(adata, sample_id)
     
     def __getitem__(self, idx):
         sample_id = self.sample_ids[idx]
-        
-        adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
-        adata = ad.read_h5ad(adata_path)
-        
-        return self.process_sample(adata, sample_id)
-        
-    def process_sample(self, adata, sample_id):
         adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
         adata = ad.read_h5ad(adata_path)
         
@@ -492,71 +450,24 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
             # Method 1: Make unique by appending _1, _2, etc. to duplicates
             adata.var_names_make_unique()
-        
-        # Initialize expression matrix with zeros (all genes from gene_list)
-        # n_spots = adata.shape[0]
-        # n_genes = len(self.gene_list)
-        exps = adata.X
-        
-        # exps = np.zeros((n_spots, n_genes))
-
-        # common_genes, adata_common_labels = self.symbol_converter.get_common_genes(self.gene_list, adata.var_names)
-        # missing_genes = self.symbol_converter.get_missing_genes(self.gene_list, adata.var_names)
-        
-        # print(f"Sample {sample_id} has {len(common_genes)} common genes with the dataset")
-        
-        # Convert gene lists to regular Python strings
-        # common_genes = [str(gene) for gene in common_genes]
-        # adata_common_labels = [str(label) for label in adata_common_labels]
-        # missing_genes = [str(gene) for gene in missing_genes]
-        # gene_list = [str(gene) for gene in self.gene_list]
-        
-        # Create a boolean mask for gene selection
-        # gene_mask = adata.var_names.isin(adata_common_labels)
-        # if hasattr(adata.X, "toarray"):
-        #     exps = adata.X[:, gene_mask].toarray()
-        # else:
-        #     exps = adata.X[:, gene_mask]
     
-        # Verify we got the right number of genes
-        # if exps.shape[1] != len(common_genes):
-        #     print(f"Warning: Expected {len(common_genes)} genes but got {exps.shape[1]}")
-        #     print(f"First few common genes: {common_genes[:5]}")
-        #     print(f"First few var names: {adata.var_names[:5]}")
-            
-        # Add zero columns for missing genes
-        # zero_cols = np.zeros((exps.shape[0], len(missing_genes)))
-        # exps = np.hstack([exps, zero_cols])
-            
-        # Reorder columns to match gene_list order
-        # Create a dictionary mapping genes to their positions
-        # gene_order = {gene: idx for idx, gene in enumerate(common_genes + missing_genes)}
-
-        # Create column order to match self.gene_list
-        # col_order = [gene_order[gene] for gene in self.gene_list]
-
-        # Reorder columns
-        # exps = exps[:, col_order]
-                
-        # if not adata.obs_names.is_unique:
-        #     print("Warning: Found duplicate observation names!")        
+        exps = adata.X
         ori_counts = exps.copy()  # Keep original for size factors if needed
         
         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
         norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
-            
+        
         # Get array coordinates
-        # pos = adata.obs[['array_row', 'array_col']].values.astype(int)
         if 'array_row' in adata.obs and 'array_col' in adata.obs:
             pos = adata.obs[['array_row', 'array_col']].values.astype(int)
         elif 'spatial' in adata.obsm:
             pos = adata.obsm['spatial'].copy()
         else:
-            print(f"Error: Sample {sample_id} does not have 'array_row' and 'array_col' in obs or 'spatial' in obsm.")
+            print(f"Error: Sample {sample_id} does not have spatial coordinates.")
             pos = np.zeros((adata.n_obs, 2), dtype=int)  
             for i in range(adata.n_obs):
                 pos[i] = [i // 64, i % 64]  
-        
+    
         pos_min = pos.min(axis=0)
         pos_max = pos.max(axis=0)
         
@@ -567,8 +478,15 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         pos_scaled = (pos_normalized * 63).astype(int)
         # Ensure positions are within bounds
         pos_scaled = np.clip(pos_scaled, 0, 63)
-        
+    
         # Get pixel coordinates
+        if 'spatial' in adata.obsm:
+            centers = adata.obsm['spatial']
+        elif 'spatial' in adata.uns:
+            centers = adata.uns['spatial']
+            print(f"Error: Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
+            print(adata)
+            raise ValueError(f"Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
         centers = adata.obsm['spatial']
 
         # Load Patches
@@ -576,36 +494,47 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         if os.path.exists(patch_path):
             patches = self._load_patches(sample_id, adata.obs_names)
         else:
-            patches = torch.randn(len(adata), 3, 112, 112) # Uses 112 x 112 random patches if none found
-            
+            patches = np.random.randn(len(adata), 3, 112, 112)
+        
         # Get adjacency matrix if required
         if self.adj:
             adj_matrix = calcADJ(pos, self.neighs, pruneTag=self.prune)
         else:
             adj_matrix = None
-            
-        # Get original counts and size factors if requested
+        
+        # Prepare ori and sf data if requested
+        ori_data = None
+        sf_data = None
         if self.ori:
             # Calculate size factors
-            n_counts = ori_counts.sum(1)
+            if hasattr(ori_counts, "toarray"):
+                ori_counts_dense = ori_counts.toarray()
+            else:
+                ori_counts_dense = ori_counts
+            
+            n_counts = ori_counts_dense.sum(1)
             sf = n_counts / np.median(n_counts)
             
-            # Store in dictionaries
-            self.ori_dict[sample_id] = ori_counts
-            self.counts_dict[sample_id] = sf    
-        
+            # Convert to tensors immediately
+            ori_data = torch.FloatTensor(ori_counts_dense)
+            sf_data = torch.FloatTensor(sf)
+    
+        # Convert all data to tensors
         patches = torch.FloatTensor(patches)
-        positions = torch.LongTensor(pos_scaled)  # Ensure positions are integers
-        expression = torch.FloatTensor(exps)
+        positions = torch.LongTensor(pos_scaled)
+        expression = torch.FloatTensor(norm_exps)  # Use normalized expression
         adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
-        
+        centers = torch.FloatTensor(centers)
+    
+        # Return consistent tensor types
         if self.adj and self.ori:
-            return patches, positions, expression, adj_matrix, [torch.FloatTensor(self.ori_dict[sample_id]), torch.FloatTensor(self.counts_dict[sample_id])], centers
+            return patches, positions, expression, adj_matrix, ori_data, sf_data, centers
         elif self.adj:
             return patches, positions, expression, adj_matrix, centers
         elif self.ori:
-            return patches, positions, expression, [torch.FloatTensor(self.ori_dict[sample_id]), torch.FloatTensor(self.counts_dict[sample_id])], centers
-        else: return patches, positions, expression, centers
+            return patches, positions, expression, ori_data, sf_data, centers
+        else: 
+            return patches, positions, expression, centers
 
 
     def __len__(self):

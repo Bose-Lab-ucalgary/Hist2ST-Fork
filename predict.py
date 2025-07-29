@@ -9,7 +9,7 @@ from scipy.stats import pearsonr,spearmanr
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score as ari_score
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
-def pk_load(fold,mode='train', flatten=False,dataset='her2st',r=4,ori=True,adj=True,prune='Grid',neighs=4):
+def pk_load(fold,mode='train', flatten=False, dataset='her2st',r=4,ori=True,adj=True,prune='Grid',neighs=4, genelist = None):
     assert dataset in ['her2st', 'cscc', 'hest1k']
     
     # Debug dataset parameters
@@ -21,13 +21,13 @@ def pk_load(fold,mode='train', flatten=False,dataset='her2st',r=4,ori=True,adj=T
     if dataset == 'hest1k':
         dataset = ViT_HEST1K(
             mode=mode, 
-            fold=fold,
             flatten=flatten,
             ori=ori,
             neighs=neighs,
             adj=adj,
             prune=prune,
-            r=r
+            r=r,
+            gene_list=genelist,
         )
         # Verify dataset loading
         print(f"\nDataset loaded:")
