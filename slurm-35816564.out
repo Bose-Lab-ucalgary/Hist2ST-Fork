@@ -1,0 +1,190 @@
+2025-07-30 09:40:21.763718: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-07-30 09:40:27.512370: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX512F AVX512_VNNI, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Using default `ModelCheckpoint`. Consider installing `litmodels` package to enable `LitModelCheckpoint` for automatic upload to the Lightning model registry.
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+You are using a CUDA device ('NVIDIA A100 80GB PCIe') that has Tensor Cores. To properly utilize them, you should set `torch.set_float32_matmul_precision('medium' | 'high')` which will trade-off precision for performance. For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
+Initializing distributed: GLOBAL_RANK: 0, MEMBER: 1/1
+----------------------------------------------------------------------------------------------------
+distributed_backend=nccl
+All distributed processes registered. Starting with 1 processes
+----------------------------------------------------------------------------------------------------
+
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0,1]
+
+  | Name            | Type       | Params | Mode 
+-------------------------------------------------------
+0 | patch_embedding | Conv2d     | 4.7 K  | train
+1 | x_embed         | Embedding  | 65.5 K | train
+2 | y_embed         | Embedding  | 65.5 K | train
+3 | vit             | ViT        | 71.4 M | train
+4 | mean            | Sequential | 3.1 M  | train
+5 | disp            | Sequential | 3.1 M  | train
+6 | pi              | Sequential | 3.1 M  | train
+7 | coef            | Sequential | 1.1 M  | train
+8 | gene_head       | Sequential | 3.1 M  | train
+-------------------------------------------------------
+84.8 M    Trainable params
+0         Non-trainable params
+84.8 M    Total params
+339.108   Total estimated model params size (MB)
+203       Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+[easydl] tensorflow not available!
+
+Loading dataset with parameters:
+  Dataset: hest1k
+  Mode: train
+  Fold: train
+Found processed path: ../../data/HERST_preprocess/3CA_genes/train with 434 samples
+Found 434 samples ids.
+
+Dataset loaded:
+  Length: 434
+
+Loading dataset with parameters:
+  Dataset: hest1k
+  Mode: train
+  Fold: test
+Found processed path: ../../data/HERST_preprocess/3CA_genes/train with 434 samples
+Found 434 samples ids.
+
+Dataset loaded:
+  Length: 434
+Today's date: 2025-07-30
+Sanity Checking: |          | 0/? [00:00<?, ?it/s]
+Processing sample TENX51
+Sanity Checking:   0%|          | 0/2 [00:00<?, ?it/s]Sanity Checking DataLoader 0:   0%|          | 0/2 [00:00<?, ?it/s]Sanity Checking DataLoader 0:  50%|█████     | 1/2 [00:16<00:16,  0.06it/s]
+Processing sample SPA30
+Sanity Checking DataLoader 0: 100%|██████████| 2/2 [00:17<00:00,  0.11it/s]                                                                           Training: |          | 0/? [00:00<?, ?it/s]Training:   0%|          | 0/217 [00:00<?, ?it/s]Epoch 0:   0%|          | 0/217 [00:00<?, ?it/s] 
+Processing sample INT27
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/train.py", line 87, in <module>
+[rank0]:     train()
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/train.py", line 77, in train
+[rank0]:     trainer.fit(model, train_loader, test_loader)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 561, in fit
+[rank0]:     call._call_and_handle_interrupt(
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/call.py", line 47, in _call_and_handle_interrupt
+[rank0]:     return trainer.strategy.launcher.launch(trainer_fn, *args, trainer=trainer, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/launchers/subprocess_script.py", line 105, in launch
+[rank0]:     return function(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 599, in _fit_impl
+[rank0]:     self._run(model, ckpt_path=ckpt_path)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1012, in _run
+[rank0]:     results = self._run_stage()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1056, in _run_stage
+[rank0]:     self.fit_loop.run()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py", line 216, in run
+[rank0]:     self.advance()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py", line 455, in advance
+[rank0]:     self.epoch_loop.run(self._data_fetcher)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/training_epoch_loop.py", line 150, in run
+[rank0]:     self.advance(data_fetcher)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/training_epoch_loop.py", line 320, in advance
+[rank0]:     batch_output = self.automatic_optimization.run(trainer.optimizers[0], batch_idx, kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 192, in run
+[rank0]:     self._optimizer_step(batch_idx, closure)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 270, in _optimizer_step
+[rank0]:     call._call_lightning_module_hook(
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/call.py", line 176, in _call_lightning_module_hook
+[rank0]:     output = fn(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/core/module.py", line 1302, in optimizer_step
+[rank0]:     optimizer.step(closure=optimizer_closure)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/core/optimizer.py", line 154, in step
+[rank0]:     step_output = self._strategy.optimizer_step(self._optimizer, closure, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/ddp.py", line 270, in optimizer_step
+[rank0]:     optimizer_output = super().optimizer_step(optimizer, closure, model, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 239, in optimizer_step
+[rank0]:     return self.precision_plugin.optimizer_step(optimizer, model=model, closure=closure, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/plugins/precision/precision.py", line 123, in optimizer_step
+[rank0]:     return optimizer.step(closure=closure, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/optim/lr_scheduler.py", line 137, in wrapper
+[rank0]:     return func.__get__(opt, opt.__class__)(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/optim/optimizer.py", line 487, in wrapper
+[rank0]:     out = func(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/optim/optimizer.py", line 91, in _use_grad
+[rank0]:     ret = func(self, *args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/optim/adam.py", line 202, in step
+[rank0]:     loss = closure()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/plugins/precision/precision.py", line 109, in _wrap_closure
+[rank0]:     closure_result = closure()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 146, in __call__
+[rank0]:     self._result = self.closure(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+[rank0]:     return func(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 131, in closure
+[rank0]:     step_output = self._step_fn()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 319, in _training_step
+[rank0]:     training_step_output = call._call_strategy_hook(trainer, "training_step", *kwargs.values())
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/call.py", line 328, in _call_strategy_hook
+[rank0]:     output = fn(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 390, in training_step
+[rank0]:     return self._forward_redirection(self.model, self.lightning_module, "training_step", *args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 641, in __call__
+[rank0]:     wrapper_output = wrapper_module(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/parallel/distributed.py", line 1643, in forward
+[rank0]:     else self._run_ddp_forward(*inputs, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/parallel/distributed.py", line 1459, in _run_ddp_forward
+[rank0]:     return self.module(*inputs, **kwargs)  # type: ignore[index]
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 634, in wrapped_forward
+[rank0]:     out = method(*_args, **_kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HIST2ST.py", line 184, in training_step
+[rank0]:     bake_x=self.aug(patch,center,adj)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HIST2ST.py", line 164, in aug
+[rank0]:     x,_,h=self(new_patch,center,adj,True)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HIST2ST.py", line 144, in forward
+[rank0]:     h = self.vit(patches,ct,adj)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HIST2ST.py", line 82, in forward
+[rank0]:     x = self.transformer(x,ct,adj)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HIST2ST.py", line 57, in forward
+[rank0]:     g=self.layer2(g+ct).squeeze(0)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/container.py", line 250, in forward
+[rank0]:     input = module(input)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/transformer.py", line 76, in forward
+[rank0]:     x = self.attn(x) + x
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/transformer.py", line 27, in forward
+[rank0]:     return self.fn(self.norm(x), **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/transformer.py", line 64, in forward
+[rank0]:     dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 1.04 GiB. GPU 0 has a total capacity of 79.25 GiB of which 962.75 MiB is free. Including non-PyTorch memory, this process has 78.30 GiB memory in use. Of the allocated memory 77.02 GiB is allocated by PyTorch, and 487.53 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Epoch 0:   0%|          | 0/217 [00:21<?, ?it/s]

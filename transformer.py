@@ -11,6 +11,8 @@ from torch.autograd import Function
 from torch.autograd.variable import *
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
+from torch.utils.checkpoint import checkpoint
+
 class SelectItem(nn.Module):
     def __init__(self, item_index):
         super(SelectItem, self).__init__()
@@ -72,7 +74,13 @@ class attn_block(nn.Module):
         super().__init__()
         self.attn=PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout))
         self.ff=PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
+        self.use_gradient_checkpointing = True
+        
     def forward(self, x):
-        x = self.attn(x) + x
-        x = self.ff(x) + x
+        if self.use_gradient_checkpointing and self.training:
+            x = checkpoint(lambda y: self.attn(y), x, use_reentrant=False) + x
+            x = checkpoint(lambda y: self.ff(y), x, use_reentrant=False) + x
+        else:
+            x = self.attn(x) + x
+            x = self.ff(x) + x
         return x

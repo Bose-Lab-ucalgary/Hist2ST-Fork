@@ -15,9 +15,17 @@ from pytorch_lightning.loggers import TensorBoardLogger
 # from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
 import os
 
+
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'  # For debugging CUDA errors
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'  # Reduce fragmentation
+
+
 
 def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
+    # Clear CUDA cache at start
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    
     k,p,d1,d2,d3,h,c=map(lambda x:int(x),tag.split('-'))
     seed = 42
     max_epochs = 350
@@ -27,6 +35,12 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    
+    # Enable memory efficient settings
+    torch.backends.cudnn.enabled = True
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True    
+    
     fold=5
     neighbours = 5
     genelist = "3CA"
@@ -73,7 +87,12 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
                         max_epochs=max_epochs,
                         logger=logger,
                         check_val_every_n_epoch=2,
-    )
+                        accumulate_grad_batches=4,  # Simulate larger batch size
+                        precision=16,  # Use half precision to reduce memory
+                        gradient_clip_val=1.0,  # Prevent gradient explosion
+                        enable_checkpointing=True,  # Enable gradient checkpointing
+                        strategy='auto',  # Let PyTorch Lightning choose best strategy
+                    )
     trainer.fit(model, train_loader, test_loader)
 
     import os
@@ -84,4 +103,7 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
     torch.save(model.state_dict(),f"./model/Hist2ST_{today}.ckpt")
         
 if __name__ == "__main__":
-    train()
+    # train()
+    
+    # Half heads and depths to avoid CUDA OOM errors
+    train(tag='5-7-1-4-2-8-16', lr=1e-5)
