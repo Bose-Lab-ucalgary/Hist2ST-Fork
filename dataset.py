@@ -410,17 +410,22 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             self.ori_dict = {}
             self.counts_dict = {}
             
-        if gene_list == "3CA":
+        if gene_list == "HER2ST":
+            self.processed_path = self.processed_path / 'HER2ST'
+        elif gene_list == "cSCC":
+            self.processed_path = self.processed_path / 'cSCC'
+        elif gene_list == "3CA":
             self.processed_path = self.processed_path / '3CA_genes'
         elif gene_list == "Hallmark":
             self.processed_path = self.processed_path / 'Hallmark_genes'
-        
-        if mode == 'validation':
-            self.processed_path = self.processed_path / 'val'
-        elif mode == 'test':
-            self.processed_path = self.processed_path / 'test'
-        else:
+
+        if mode == 'train':
             self.processed_path = self.processed_path / 'train'
+        elif mode == 'val':
+            self.processed_path = self.processed_path / 'val'
+        else:
+            self.processed_path = self.processed_path / 'test'
+            
         print(f"Found processed path: {self.processed_path} with {len(list(self.processed_path.glob('*.h5ad')))} samples")
 
         self.sample_ids = [file.stem.split('_')[0] for file in self.processed_path.glob("*.h5ad")]

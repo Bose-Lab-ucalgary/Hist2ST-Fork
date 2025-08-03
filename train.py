@@ -26,6 +26,13 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
     torch.cuda.empty_cache()
     torch.cuda.synchronize()
     
+    # Check GPU availability
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"Number of GPUs: {torch.cuda.device_count()}")
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+        print(f"GPU {i} Memory: {torch.cuda.get_device_properties(i).total_memory / 1024**3:.1f} GB")
+    
     k,p,d1,d2,d3,h,c=map(lambda x:int(x),tag.split('-'))
     seed = 42
     max_epochs = 350
@@ -56,13 +63,17 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
         prune = 'NA'# IDK??
         if genelist == "3CA":
             genes = 2977
-        else: genes = 0
+        elif 
+        
+    
+    # Increase batch size when using multiple GPUs
+    batch_size = 2 if torch.cuda.device_count() > 1 else 1
         
     trainset = pk_load('train',dataset =data, flatten=False, adj=True, ori=True, prune=prune, neighs=neighbours, genelist=genelist)
-    train_loader = DataLoader(trainset, batch_size=1, num_workers=0, shuffle=True)
+    train_loader = DataLoader(trainset, batch_size=batch_size, num_workers=0, shuffle=True)
 
     testset = pk_load('test', dataset =data, flatten=False, adj=True, ori=True, prune=prune, neighs=neighbours, genelist=genelist)
-    test_loader = DataLoader(testset, batch_size=1, num_workers=0, shuffle=False)
+    test_loader = DataLoader(testset, batch_size=batch_size, num_workers=0, shuffle=False)
     
 
     log_name = 'hist2st-1_hestpreprocessed'
@@ -83,16 +94,21 @@ def train(tag='5-7-2-8-4-16-32', lr = 1e-5):
     today = date.today()
     print(f"Today's date: {today}")
     logger=None
-    trainer = pl.Trainer( accelerator = 'gpu', 
-                        max_epochs=max_epochs,
-                        logger=logger,
-                        check_val_every_n_epoch=2,
-                        accumulate_grad_batches=4,  # Simulate larger batch size
-                        precision=16,  # Use half precision to reduce memory
-                        gradient_clip_val=1.0,  # Prevent gradient explosion
-                        enable_checkpointing=True,  # Enable gradient checkpointing
-                        strategy='auto',  # Let PyTorch Lightning choose best strategy
-                    )
+    trainer = pl.Trainer( 
+        accelerator = 'gpu', 
+        devices = 2,
+        strategy = 'ddp',  # Use Distributed Data Parallel for multi-GPU training
+        max_epochs=max_epochs,
+        logger=logger,
+        # check_val_every_n_epoch=2,
+        # Changes to save memory:
+        check_val_every_n_epoch=5,
+        accumulate_grad_batches=4,  # Simulate larger batch size
+        precision=16,  # Use half precision to reduce memory
+        gradient_clip_val=1.0,  # Prevent gradient explosion
+        enable_checkpointing=True,  # Enable gradient checkpointing
+        # strategy='auto',  # Let PyTorch Lightning choose best strategy
+    )
     trainer.fit(model, train_loader, test_loader)
 
     import os
