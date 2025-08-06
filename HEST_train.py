@@ -12,6 +12,7 @@ from datetime import date
 from config import GENE_LISTS
 from custom_trainer import custom_eval_loop, custom_train_loop
 from predict import test as predict
+from callbacks import TimeTrackingCallback, GPUMemoryMonitorCallback, ClearCacheCallback, OOMHandlerCallback
 
 # Import your modules here
 from utils import *
@@ -66,7 +67,10 @@ def parse_args():
     parser.add_argument('--prune', type=str, default='NA', help='Pruning method (default: NA)')
     return parser.parse_args()
 
-def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", gene_list="3CA", num_workers=16, gpus=1, strategy="ddp", learning_rate=1e-5, batch_size=1, patience=25, tag='5-7-2-8-4-16-32', prune='NA', neighbors=5, dropout=0.2, zinb=False, nb=False, bake=False, lamb=0.1):
+def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", 
+          gene_list="3CA", num_workers=16, gpus=1, strategy="ddp", learning_rate=1e-5, 
+          batch_size=1, patience=25, tag='5-7-2-8-4-16-32', prune='NA', neighbors=5, 
+          dropout=0.2, zinb=False, nb=False, bake=False, lamb=0.1):
     # Parse tag parameters
     kernel, patch, depth1, depth2, depth3, heads, channel = map(int, tag.split('-'))
     # Get number of genes from config
@@ -128,26 +132,27 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     memory_monitor = GPUMemoryMonitorCallback(log_every_n_batches=10)
     cache_cleaner = ClearCacheCallback(clear_every_n_batches=20)
     oom_handler = OOMHandlerCallback()
+    time_tracker = TimeTrackingCallback()  # Add time tracking callback
     
     # Setup trainer with configurable GPU settings
     trainer_kwargs = {
         'max_epochs': epochs,
         'devices': devices,
         'strategy': strategy,
-        'max_epochs': epochs,
         'logger': logger,
         'callbacks': [
             checkpoint_callback, 
             early_stop_callback,
             memory_monitor,
             cache_cleaner,
-            oom_handler
+            oom_handler,
+            time_tracker  # Add to callbacks list
         ],
         'check_val_every_n_epoch': 5,
-        'enable_progress_bar': False,  # Reduce memory overhead
+        'enable_progress_bar': False,
         'log_every_n_steps': 20,
         'precision': args.precision,
-        'gradient_clip_val':0.5,
+        'gradient_clip_val': 0.5,
         'accumulate_grad_batches': 16,
     }
     if gpus > 0:
@@ -162,8 +167,6 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
         trainer_kwargs['accelerator'] = "cpu"
     
     trainer = pl.Trainer(**trainer_kwargs)
-    
-    # Train the model with validation
     trainer.fit(model, train_loader, val_loader)
     # Assuming you have a DataLoader called test_loader and a model
     
@@ -193,6 +196,12 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     #     if patience_counter > patience:
     #         print("Early stopping triggered.")
     #         break
+    
+    timing_stats = time_tracker.get_stats()
+    if timing_stats:
+        print(f"\nFinal timing statistics:")
+        print(f"Average epoch time: {time_tracker._format_time(timing_stats['average_epoch_time'])}")
+    
     
     # Load best model for evaluation
     best_model_path = checkpoint_callback.best_model_path
@@ -257,100 +266,6 @@ def run_test_phase(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="
         pred.var["-log10p_val"] = -np.log10(p_val)
     print('Test Pearson Correlation:', np.nanmean(R))
     return pred, gt, R, p_val
-
-class GPUMemoryMonitorCallback(pl.Callback):
-    """Monitor GPU memory usage during training"""
-    
-    def __init__(self, log_every_n_batches=10, device_id=0):
-        self.log_every_n_batches = log_every_n_batches
-        self.device_id = device_id
-        
-    def print_gpu_memory(self, prefix="", stage=""):
-        """Print current GPU memory usage"""
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-            allocated = torch.cuda.memory_allocated(self.device_id) / 1024**3
-            reserved = torch.cuda.memory_reserved(self.device_id) / 1024**3
-            max_allocated = torch.cuda.max_memory_allocated(self.device_id) / 1024**3
-            max_reserved = torch.cuda.max_memory_reserved(self.device_id) / 1024**3
-            
-            print(f"{stage} {prefix} GPU {self.device_id} Memory:")
-            print(f"  Allocated: {allocated:.2f} GB")
-            print(f"  Reserved:  {reserved:.2f} GB")
-            print(f"  Max Allocated: {max_allocated:.2f} GB")
-            print(f"  Max Reserved:  {max_reserved:.2f} GB")
-    
-    def on_train_start(self, trainer, pl_module):
-        self.print_gpu_memory("Start", "TRAIN")
-        if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats(self.device_id)
-    
-    def on_train_epoch_start(self, trainer, pl_module):
-        self.print_gpu_memory(f"Epoch {trainer.current_epoch} Start", "TRAIN")
-    
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if batch_idx % self.log_every_n_batches == 0:
-            self.print_gpu_memory(f"Batch {batch_idx}", "TRAIN")
-    
-    def on_train_epoch_end(self, trainer, pl_module):
-        self.print_gpu_memory(f"Epoch {trainer.current_epoch} End", "TRAIN")
-    
-    def on_validation_start(self, trainer, pl_module):
-        self.print_gpu_memory("Start", "VAL")
-    
-    def on_validation_end(self, trainer, pl_module):
-        self.print_gpu_memory("End", "VAL")
-
-class ClearCacheCallback(pl.Callback):
-    """Clear GPU cache at strategic points"""
-    
-    def __init__(self, clear_every_n_batches=20):
-        self.clear_every_n_batches = clear_every_n_batches
-    
-    def clear_cache(self):
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-        gc.collect()
-    
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if batch_idx % self.clear_every_n_batches == 0:
-            self.clear_cache()
-    
-    def on_train_epoch_end(self, trainer, pl_module):
-        self.clear_cache()
-    
-    def on_validation_end(self, trainer, pl_module):
-        self.clear_cache()
-
-class OOMHandlerCallback(pl.Callback):
-    """Handle out-of-memory errors during training"""
-    
-    def __init__(self):
-        self.oom_count = 0
-    
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
-        # This won't catch OOM during forward pass, but can help with cleanup
-        pass
-    
-    def on_exception(self, trainer, pl_module, exception):
-        if isinstance(exception, RuntimeError) and "out of memory" in str(exception):
-            self.oom_count += 1
-            print(f"OOM Error #{self.oom_count} detected: {exception}")
-            
-            # Clear cache
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-            gc.collect()
-            
-            print("Cleared CUDA cache after OOM")
-            
-            # Log memory state
-            if torch.cuda.is_available():
-                allocated = torch.cuda.memory_allocated() / 1024**3
-                reserved = torch.cuda.memory_reserved() / 1024**3
-                print(f"Post-OOM Memory - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
 
 if __name__ == "__main__":
     print(f"Script started on: {date.today().strftime('%Y-%m-%d')}")
