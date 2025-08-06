@@ -1,5 +1,6 @@
 import os
 import glob
+from time import time
 from turtle import pos
 import torch
 import torchvision
@@ -445,10 +446,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         sample_id = self.sample_ids[idx]
-        adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
-        adata = ad.read_h5ad(adata_path)
         
         print(f"\nProcessing sample {sample_id}")
+        adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
+        adata = robust_read_h5ad(adata_path)
         
         # Make var_names unique before any indexing
         if not adata.var_names.is_unique:
@@ -545,30 +546,179 @@ class ViT_HEST1K(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.sample_ids)
 
-    def _load_patches(self, sample_id, spot_names):
-        patches = []
+    def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
         path = os.path.join(self.patch_path, f"{sample_id}.h5")
-        
-        with h5py.File(path, 'r') as f:
-            images = f['img'][:]
-            barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
-            
-            barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
-            
-            
-            for spot in spot_names:
-                if spot in barcode_to_idx:
-                    idx = barcode_to_idx[spot]
-                    img = images[idx]
-                    # patches.append(images[idx])
-
-                    # Why convert to tensor and normalize??
-                    if len(img.shape) == 2:
-                        img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
-                    else:
-                        img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
-                    patches.append(img)
-                else:
-                    patches.append(np.zeros((3, 112, 112)))
+        for attempt in range(retries):
+            try:
+                with h5py.File(path, 'r') as f:
+                    patches = []
+                    images = f['img'][:]
+                    barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
                     
-        return np.array(patches)
+                    barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
+                    
+                    for spot in spot_names:
+                        if spot in barcode_to_idx:
+                            idx = barcode_to_idx[spot]
+                            img = images[idx]
+                            # patches.append(images[idx])
+
+                            # Why convert to tensor and normalize??
+                            if len(img.shape) == 2:
+                                img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
+                            else:
+                                img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
+                            patches.append(img)
+                        else:
+                            patches.append(np.zeros((3, 112, 112)))
+                    
+                    return np.array(patches)
+            except OSError as e:
+                print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
+                time.sleep(delay)
+        raise OSError(f"Failed to read {path} after {retries} attempts.")
+
+import time
+
+def robust_read_h5ad(path, retries=3, delay=1.0):
+    for attempt in range(retries):
+        try:
+            return ad.read_h5ad(path)
+        except OSError as e:
+            print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
+            time.sleep(delay)
+    raise OSError(f"Failed to read {path} after {retries} attempts.")
+
+def __getitem__(self, idx):
+    sample_id = self.sample_ids[idx]
+    adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
+    adata = robust_read_h5ad(adata_path)
+    
+    print(f"\nProcessing sample {sample_id}")
+    
+    # Make var_names unique before any indexing
+    if not adata.var_names.is_unique:
+        print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
+        # Method 1: Make unique by appending _1, _2, etc. to duplicates
+        adata.var_names_make_unique()
+
+    exps = adata.X
+    ori_counts = exps.copy()  # Keep original for size factors if needed
+
+    #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
+    norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
+
+    # Get array coordinates
+    if 'array_row' in adata.obs and 'array_col' in adata.obs:
+        pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+    elif 'spatial' in adata.obsm:
+        pos = adata.obsm['spatial'].copy()
+    else:
+        print(f"Error: Sample {sample_id} does not have spatial coordinates.")
+        pos = np.zeros((adata.n_obs, 2), dtype=int)  
+        for i in range(adata.n_obs):
+            pos[i] = [i // 64, i % 64]  
+
+    pos_min = pos.min(axis=0)
+    pos_max = pos.max(axis=0)
+
+    # Unique to HIS2ST - expects positions in [0, 63] range ?
+    # Normalize positions to [0, 1] range
+    pos_normalized = (pos - pos_min) / (pos_max - pos_min + 1e-8)
+    # Scale to [0, 63]
+    pos_scaled = (pos_normalized * 63).astype(int)
+    # Ensure positions are within bounds
+    pos_scaled = np.clip(pos_scaled, 0, 63)
+
+    # Get pixel coordinates
+    if 'spatial' in adata.obsm:
+        centers = adata.obsm['spatial']
+    elif 'spatial' in adata.uns:
+        centers = adata.uns['spatial']
+        print(f"Error: Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
+        print(adata)
+        raise ValueError(f"Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
+    centers = adata.obsm['spatial']
+
+    # Load Patches
+    patch_path = os.path.join(self.patch_path, f"{sample_id}.h5")
+    if os.path.exists(patch_path):
+        patches = self._load_patches(sample_id, adata.obs_names)
+    else:
+        patches = np.random.randn(len(adata), 3, 112, 112)
+
+    # Get adjacency matrix if required
+    if self.adj:
+        adj_matrix = calcADJ(pos, self.neighs, pruneTag=self.prune)
+    else:
+        adj_matrix = None
+
+    # Prepare ori and sf data if requested
+    ori_data = None
+    sf_data = None
+    if self.ori:
+        # Calculate size factors
+        if hasattr(ori_counts, "toarray"):
+            ori_counts_dense = ori_counts.toarray()
+        else:
+            ori_counts_dense = ori_counts
+
+        n_counts = ori_counts_dense.sum(1)
+        sf = n_counts / np.median(n_counts)
+
+        # Convert to tensors immediately
+        ori_data = torch.FloatTensor(ori_counts_dense)
+        sf_data = torch.FloatTensor(sf)
+
+    # Convert all data to tensors
+    patches = torch.FloatTensor(patches)
+    positions = torch.LongTensor(pos_scaled)
+    expression = torch.FloatTensor(norm_exps)  # Use normalized expression
+    adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
+    centers = torch.FloatTensor(centers)
+
+    # Return consistent tensor types
+    if self.adj and self.ori:
+        return patches, positions, expression, adj_matrix, ori_data, sf_data, centers
+    elif self.adj:
+        return patches, positions, expression, adj_matrix, centers
+    elif self.ori:
+        return patches, positions, expression, ori_data, sf_data, centers
+    else: 
+        return patches, positions, expression, centers
+
+
+def __len__(self):
+    return len(self.sample_ids)
+
+def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
+    path = os.path.join(self.patch_path, f"{sample_id}.h5")
+    for attempt in range(retries):
+        try:
+            with h5py.File(path, 'r') as f:
+                patches = []
+                images = f['img'][:]
+                barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
+                
+                barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
+                
+                for spot in spot_names:
+                    if spot in barcode_to_idx:
+                        idx = barcode_to_idx[spot]
+                        img = images[idx]
+                        # patches.append(images[idx])
+
+                        # Why convert to tensor and normalize??
+                        if len(img.shape) == 2:
+                            img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
+                        else:
+                            img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
+                        patches.append(img)
+                    else:
+                        patches.append(np.zeros((3, 112, 112)))
+                
+                return np.array(patches)
+        except OSError as e:
+            print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
+            time.sleep(delay)
+    raise OSError(f"Failed to read {path} after {retries} attempts.")

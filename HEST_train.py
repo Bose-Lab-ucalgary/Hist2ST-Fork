@@ -1,3 +1,4 @@
+import gc
 import os
 import torch
 import random
@@ -9,11 +10,15 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import DataLoader
 from datetime import date
 from config import GENE_LISTS
+from custom_trainer import custom_eval_loop, custom_train_loop
+from predict import test as predict
 
 # Import your modules here
 from utils import *
 from HIST2ST import *
 from predict import *
+
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train and test Hist2ST model with configurable parameters')    
@@ -61,7 +66,7 @@ def parse_args():
     parser.add_argument('--prune', type=str, default='NA', help='Pruning method (default: NA)')
     return parser.parse_args()
 
-def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", gene_list="3CA", num_workers=16, gpus=1, strategy=None, learning_rate=1e-5, batch_size=1, patience=25, tag='5-7-2-8-4-16-32', prune='NA', neighbors=5, dropout=0.2, zinb=False, nb=False, bake=False, lamb=0.1):
+def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", gene_list="3CA", num_workers=16, gpus=1, strategy="ddp", learning_rate=1e-5, batch_size=1, patience=25, tag='5-7-2-8-4-16-32', prune='NA', neighbors=5, dropout=0.2, zinb=False, nb=False, bake=False, lamb=0.1):
     # Parse tag parameters
     kernel, patch, depth1, depth2, depth3, heads, channel = map(int, tag.split('-'))
     # Get number of genes from config
@@ -81,14 +86,14 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
 
     # Load datasets
     trainset = vit_dataset(mode='train', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbors, gene_list=gene_list)
-    train_loader = DataLoader(trainset, batch_size=batch_size, num_workers=num_workers, shuffle=True)
+    train_loader = DataLoader(trainset, batch_size=batch_size, num_workers=num_workers, shuffle=True, pin_memory=False)
 
     valset = vit_dataset(mode='val', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbors, gene_list=gene_list)
-    val_loader = DataLoader(valset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+    val_loader = DataLoader(valset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=False)
 
     testset = vit_dataset(mode='test', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbors, gene_list=gene_list)
-    test_loader = DataLoader(testset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
-    
+    test_loader = DataLoader(testset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=False)
+
     # Get label for clustering evaluation if available
     # label = getattr(testset, 'label', {}).get(getattr(testset, 'names', [''])[0], None)
     
@@ -103,15 +108,15 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     # Setup callbacks
     checkpoint_callback = ModelCheckpoint(
         dirpath=modelsave_address,
-        filename=f"{log_name}" + "_{epoch:02d}_{val_loss:.2f}",
-        monitor='val_loss',
+        filename=f"{log_name}" + "_{epoch:02d}_{valid_loss:.2f}",
+        monitor='valid_loss',
         mode='min',
         save_top_k=3,
         save_last=True
     )
     
     early_stop_callback = EarlyStopping(
-        monitor='val_loss',
+        monitor='valid_loss',
         # min_delta=0.00,
         patience=patience,
         verbose=True,
@@ -120,17 +125,30 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     
     # Configure trainer
     devices = torch.cuda.device_count() if torch.cuda.is_available() else 0
-
+    memory_monitor = GPUMemoryMonitorCallback(log_every_n_batches=10)
+    cache_cleaner = ClearCacheCallback(clear_every_n_batches=20)
+    oom_handler = OOMHandlerCallback()
+    
     # Setup trainer with configurable GPU settings
     trainer_kwargs = {
         'max_epochs': epochs,
+        'devices': devices,
+        'strategy': strategy,
+        'max_epochs': epochs,
         'logger': logger,
-        'callbacks': [checkpoint_callback, early_stop_callback],
-        'check_val_every_n_epoch': 1,
-        'log_every_n_steps': 10,
+        'callbacks': [
+            checkpoint_callback, 
+            early_stop_callback,
+            memory_monitor,
+            cache_cleaner,
+            oom_handler
+        ],
+        'check_val_every_n_epoch': 5,
+        'enable_progress_bar': False,  # Reduce memory overhead
+        'log_every_n_steps': 20,
         'precision': args.precision,
-        # 'gradient_clip_val': 1.0,
-        # 'accumulate_grad_batches': 4,
+        'gradient_clip_val':0.5,
+        'accumulate_grad_batches': 16,
     }
     if gpus > 0:
         trainer_kwargs['accelerator'] = "gpu"
@@ -147,6 +165,34 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     
     # Train the model with validation
     trainer.fit(model, train_loader, val_loader)
+    # Assuming you have a DataLoader called test_loader and a model
+    
+    # Define optimizer and loss function
+    # optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    # loss_fn = torch.nn.MSELoss()  # or whatever loss function is appropriate
+    # best_val_loss = float('inf')
+    # patience_counter = 0
+    
+    # for epoch in range(epochs):
+    #     custom_train_loop(model, train_loader, optimizer, loss_fn, device='cuda')
+        
+    #     # Validation step
+    #     val_preds, val_gts, val_coords = custom_eval_loop(model, val_loader, device='cuda')
+    #     val_loss = loss_fn(val_preds, val_gts).item()  # or another metric
+    #     print(f"Epoch {epoch}: Validation loss = {val_loss:.4f}")
+        
+    #     # Save best model
+    #     if val_loss < best_val_loss:
+    #         best_val_loss = val_loss
+    #         torch.save(model.state_dict(), "best_model.pt")
+    #         patience_counter = 0
+    #     else:
+    #         patience_counter += 1
+
+    #     # Early stopping
+    #     if patience_counter > patience:
+    #         print("Early stopping triggered.")
+    #         break
     
     # Load best model for evaluation
     best_model_path = checkpoint_callback.best_model_path
@@ -155,7 +201,7 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", g
     
     # Additional evaluation
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    pred, gt = test(best_model, test_loader, device)
+    pred, gt = pred(best_model, test_loader, device)
     R, p_val = get_R(pred, gt)[0]
     pred.var["p_val"] = p_val
     pred.var["-log10p_val"] = -np.log10(p_val)
@@ -184,14 +230,15 @@ def validate(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k
     model = Hist2ST.load_from_checkpoint(checkpoint_path)
     # Run predictions
     device = 'cuda' if gpus > 0 and torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
     pred, gt = test(model, val_loader, device)
-    R, p_val = get_R(pred, gt)[0]
+    R, p_val = pred(pred, gt)[0]
     pred.var["p_val"] = p_val
     pred.var["-log10p_val"] = -np.log10(p_val)
     print('Validation Pearson Correlation:', np.nanmean(R))
     return pred, gt, R, p_val
 
-def test(args, vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k", gene_list="3CA", checkpoint_path=None, num_workers=16, gpus=1, neighbours=5, prune="NA", batch_size=1):
+def run_test_phase(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k", gene_list="3CA", checkpoint_path=None, num_workers=16, gpus=1, neighbours=5, prune="NA", batch_size=1):
     n_genes = GENE_LISTS[gene_list]["n_genes"]
     # Load test dataset
     testset = vit_dataset(mode='test', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbours, gene_list=gene_list)
@@ -205,10 +252,105 @@ def test(args, vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest
     device = 'cuda' if gpus > 0 and torch.cuda.is_available() else 'cpu'
     pred, gt = test(model, test_loader, device)
     R, p_val = get_R(pred, gt)[0]
-    pred.var["p_val"] = p_val
-    pred.var["-log10p_val"] = -np.log10(p_val)
+    if hasattr(pred, "var"):
+        pred.var["p_val"] = p_val
+        pred.var["-log10p_val"] = -np.log10(p_val)
     print('Test Pearson Correlation:', np.nanmean(R))
     return pred, gt, R, p_val
+
+class GPUMemoryMonitorCallback(pl.Callback):
+    """Monitor GPU memory usage during training"""
+    
+    def __init__(self, log_every_n_batches=10, device_id=0):
+        self.log_every_n_batches = log_every_n_batches
+        self.device_id = device_id
+        
+    def print_gpu_memory(self, prefix="", stage=""):
+        """Print current GPU memory usage"""
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            allocated = torch.cuda.memory_allocated(self.device_id) / 1024**3
+            reserved = torch.cuda.memory_reserved(self.device_id) / 1024**3
+            max_allocated = torch.cuda.max_memory_allocated(self.device_id) / 1024**3
+            max_reserved = torch.cuda.max_memory_reserved(self.device_id) / 1024**3
+            
+            print(f"{stage} {prefix} GPU {self.device_id} Memory:")
+            print(f"  Allocated: {allocated:.2f} GB")
+            print(f"  Reserved:  {reserved:.2f} GB")
+            print(f"  Max Allocated: {max_allocated:.2f} GB")
+            print(f"  Max Reserved:  {max_reserved:.2f} GB")
+    
+    def on_train_start(self, trainer, pl_module):
+        self.print_gpu_memory("Start", "TRAIN")
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(self.device_id)
+    
+    def on_train_epoch_start(self, trainer, pl_module):
+        self.print_gpu_memory(f"Epoch {trainer.current_epoch} Start", "TRAIN")
+    
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if batch_idx % self.log_every_n_batches == 0:
+            self.print_gpu_memory(f"Batch {batch_idx}", "TRAIN")
+    
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.print_gpu_memory(f"Epoch {trainer.current_epoch} End", "TRAIN")
+    
+    def on_validation_start(self, trainer, pl_module):
+        self.print_gpu_memory("Start", "VAL")
+    
+    def on_validation_end(self, trainer, pl_module):
+        self.print_gpu_memory("End", "VAL")
+
+class ClearCacheCallback(pl.Callback):
+    """Clear GPU cache at strategic points"""
+    
+    def __init__(self, clear_every_n_batches=20):
+        self.clear_every_n_batches = clear_every_n_batches
+    
+    def clear_cache(self):
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        gc.collect()
+    
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if batch_idx % self.clear_every_n_batches == 0:
+            self.clear_cache()
+    
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.clear_cache()
+    
+    def on_validation_end(self, trainer, pl_module):
+        self.clear_cache()
+
+class OOMHandlerCallback(pl.Callback):
+    """Handle out-of-memory errors during training"""
+    
+    def __init__(self):
+        self.oom_count = 0
+    
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        # This won't catch OOM during forward pass, but can help with cleanup
+        pass
+    
+    def on_exception(self, trainer, pl_module, exception):
+        if isinstance(exception, RuntimeError) and "out of memory" in str(exception):
+            self.oom_count += 1
+            print(f"OOM Error #{self.oom_count} detected: {exception}")
+            
+            # Clear cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+            gc.collect()
+            
+            print("Cleared CUDA cache after OOM")
+            
+            # Log memory state
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / 1024**3
+                reserved = torch.cuda.memory_reserved() / 1024**3
+                print(f"Post-OOM Memory - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
 
 if __name__ == "__main__":
     print(f"Script started on: {date.today().strftime('%Y-%m-%d')}")
@@ -319,7 +461,7 @@ if __name__ == "__main__":
         print("TESTING PHASE")
         print("="*50)
         
-        pred_test, gt_test, R_test, p_val_test = test(
+        pred_test, gt_test, R_test, p_val_test = run_test_phase(
             vit_dataset=vit_dataset,
             model_address=args.model_dir,
             dataset_name=args.dataset.lower(),

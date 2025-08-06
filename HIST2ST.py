@@ -89,7 +89,7 @@ class Hist2ST(pl.LightningModule):
                  zinb=0, nb=False, bake=0, lamb=0, policy='mean', 
                 ):
         super().__init__()
-        # self.save_hyperparameters()
+        self.save_hyperparameters()
         dim=(fig_size//patch_size)**2*channel//8
         self.learning_rate = learning_rate
         
