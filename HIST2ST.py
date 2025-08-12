@@ -1,3 +1,4 @@
+from sklearn.cluster import KMeans
 import torch
 import numpy as np
 import pytorch_lightning as pl
@@ -11,6 +12,8 @@ from copy import deepcopy as dcp
 from collections import defaultdict as dfd
 from sklearn.metrics import adjusted_rand_score as ari_score
 from sklearn.metrics.cluster import normalized_mutual_info_score as nmi_score
+import anndata as ann
+import scanpy as sc
 class convmixer_block(nn.Module):
     def __init__(self,dim,kernel_size):
         super().__init__()
@@ -237,3 +240,19 @@ class Hist2ST(pl.LightningModule):
         StepLR = torch.optim.lr_scheduler.StepLR(optim, step_size=50, gamma=0.9)
         optim_dict = {'optimizer': optim, 'lr_scheduler': StepLR}
         return optim_dict
+    
+    def predict_step(self, batch, batch_idx):
+        patch, pos, exp, adj, oris, sfs, center, sample_id = batch
+        
+        # Forward pass
+        pred, extra, h = self(patch, center, adj.squeeze(0))
+        
+        # Extract sample info if available in batch
+        sample_info = {
+            'batch_idx': batch_idx,
+            'pred': pred.squeeze(0).cpu().numpy(),
+            'gt': exp.squeeze(0).cpu().numpy(),
+            'centers': center.squeeze(0).cpu().numpy(),
+            'sample_id': sample_id
+        }
+        return sample_info

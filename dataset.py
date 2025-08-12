@@ -15,6 +15,7 @@ import torch.optim as optim
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+from torch.utils.data.dataloader import default_collate
 from PIL import ImageFile, Image
 import h5py
 from pathlib import Path
@@ -532,6 +533,16 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
         centers = torch.FloatTensor(centers)
     
+        if self.mode=='test':
+            if self.adj and self.ori:
+                return patches, positions, expression, adj_matrix, ori_data, sf_data, centers, sample_id
+            elif self.adj:
+                return patches, positions, expression, adj_matrix, centers, sample_id
+            elif self.ori:
+                return patches, positions, expression, ori_data, sf_data, centers, sample_id
+            else: 
+                return patches, positions, expression, centers, sample_id
+
         # Return consistent tensor types
         if self.adj and self.ori:
             return patches, positions, expression, adj_matrix, ori_data, sf_data, centers
@@ -722,3 +733,17 @@ def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
             print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
             time.sleep(delay)
     raise OSError(f"Failed to read {path} after {retries} attempts.")
+
+# Add to your dataset or dataloader
+def custom_collate_fn(batch):
+    """Custom collate function to handle variable sample sizes"""
+    # Sort batch by sample complexity/size
+    batch = sorted(batch, key=lambda x: x[0].numel())  # Sort by patch size
+    return default_collate(batch)
+
+# # In your train function:
+# train_loader = DataLoader(
+#     trainset, 
+#     batch_size=batch_size,
+#     collate_fn=custom_collate_fn,  # Add this
+#     # ... other params ...

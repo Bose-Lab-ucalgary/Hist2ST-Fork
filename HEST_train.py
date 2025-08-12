@@ -18,6 +18,7 @@ from callbacks import TimeTrackingCallback, GPUMemoryMonitorCallback, ClearCache
 from utils import *
 from HIST2ST import *
 from predict import *
+from dataset import ViT_HEST1K, custom_collate_fn
 
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -67,30 +68,13 @@ def parse_args():
     parser.add_argument('--prune', type=str, default='NA', help='Pruning method (default: NA)')
     return parser.parse_args()
 
-def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", 
-          gene_list="3CA", num_workers=16, gpus=1, strategy="ddp", learning_rate=1e-5, 
-          batch_size=1, patience=25, tag='5-7-2-8-4-16-32', prune='NA', neighbors=5, 
-          dropout=0.2, zinb=False, nb=False, bake=False, lamb=0.1):
-    # Parse tag parameters
-    kernel, patch, depth1, depth2, depth3, heads, channel = map(int, tag.split('-'))
-    # Get number of genes from config
-    n_genes = GENE_LISTS[gene_list]["n_genes"]
-    
-    if gene_list not in GENE_LISTS:
-        raise ValueError(f"Unknown gene list: {gene_list}")
-    
-    model = Hist2ST(
-        depth1=depth1, depth2=depth2, depth3=depth3,
-        n_genes=n_genes, learning_rate=learning_rate,
-        kernel_size=kernel, patch_size=patch,
-        heads=heads, channel=channel, dropout=dropout,
-        zinb=zinb, nb=nb,
-        bake=bake, lamb=lamb
-    )
+def train(args, model, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model", 
+          gene_list="3CA", num_workers=16, gpus=1, strategy="ddp", tag='5-7-1-4-2-8-16',
+          batch_size=1, patience=25, prune='NA', neighbors=5):
 
     # Load datasets
     trainset = vit_dataset(mode='train', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbors, gene_list=gene_list)
-    train_loader = DataLoader(trainset, batch_size=batch_size, num_workers=num_workers, shuffle=True, pin_memory=False)
+    train_loader = DataLoader(trainset, batch_size=batch_size, collate_fn=custom_collate_fn, num_workers=num_workers, shuffle=True, pin_memory=False)
 
     valset = vit_dataset(mode='val', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbors, gene_list=gene_list)
     val_loader = DataLoader(valset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=False)
@@ -106,17 +90,31 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model",
     log_name = f'hist2st_hest1k_{tag}_{today}'
     # logger = TensorBoardLogger('logs', name=log_name)
         # Setup logger
-    logger = CSVLogger(save_dir=modelsave_address + "/../logs/",
+    # Create directories explicitly
+    os.makedirs(modelsave_address, exist_ok=True)
+    log_dir = os.path.join(modelsave_address, "../logs/")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Verify directory exists and is writable
+    if not os.path.exists(modelsave_address):
+        raise ValueError(f"Could not create checkpoint directory: {modelsave_address}")
+    if not os.access(modelsave_address, os.W_OK):
+        raise ValueError(f"Checkpoint directory not writable: {modelsave_address}")
+    
+    print(f"Saving checkpoints to: {os.path.abspath(modelsave_address)}")
+    logger = CSVLogger(save_dir=log_dir,
                          name="my_test_log_" + log_name)
-        
+    
     # Setup callbacks
     checkpoint_callback = ModelCheckpoint(
         dirpath=modelsave_address,
-        filename=f"{log_name}" + "_{epoch:02d}_{valid_loss:.2f}",
-        monitor='valid_loss',
-        mode='min',
-        save_top_k=3,
-        save_last=True
+        filename=f"{log_name}" + "_{epoch:02d}",
+        monitor=None,
+        save_top_k=-1,
+        save_last=True,  # This creates 'last.ckpt'
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
+        verbose=True
     )
     
     early_stop_callback = EarlyStopping(
@@ -130,7 +128,7 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model",
     # Configure trainer
     devices = torch.cuda.device_count() if torch.cuda.is_available() else 0
     memory_monitor = GPUMemoryMonitorCallback(log_every_n_batches=10)
-    cache_cleaner = ClearCacheCallback(clear_every_n_batches=20)
+    cache_cleaner = ClearCacheCallback(clear_every_n_batches=5)
     oom_handler = OOMHandlerCallback()
     time_tracker = TimeTrackingCallback()  # Add time tracking callback
     
@@ -152,22 +150,25 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model",
         'enable_progress_bar': False,
         'log_every_n_steps': 20,
         'precision': args.precision,
-        'gradient_clip_val': 0.5,
-        'accumulate_grad_batches': 16,
+        'gradient_clip_val': 1.0,
+        'accumulate_grad_batches': 4,
     }
-    if gpus > 0:
-        trainer_kwargs['accelerator'] = "gpu"
-        if gpus == 1:
-            trainer_kwargs['devices'] = [0]
-        else:
-            trainer_kwargs['devices'] = gpus
-            if strategy:
-                trainer_kwargs['strategy'] = strategy
-    else:
-        trainer_kwargs['accelerator'] = "cpu"
     
+    # Auto-detect and resume from last checkpoint
+    ckpt_path = None
+    last_checkpoint = os.path.join(modelsave_address, "last.ckpt")
+    
+    if os.path.exists(last_checkpoint):
+        print(f"Found existing checkpoint: {last_checkpoint}")
+        ckpt_path = last_checkpoint
+        print("Resuming training from last checkpoint...")
+    else:
+        print("No existing checkpoint found. Starting from scratch...")
+
     trainer = pl.Trainer(**trainer_kwargs)
-    trainer.fit(model, train_loader, val_loader)
+    
+    # This will automatically resume if ckpt_path is provided
+    trainer.fit(model, train_loader, val_loader, ckpt_path=ckpt_path)
     # Assuming you have a DataLoader called test_loader and a model
     
     # Define optimizer and loss function
@@ -209,12 +210,12 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model",
     best_model = Hist2ST.load_from_checkpoint(best_model_path)
     
     # Additional evaluation
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    pred, gt = pred(best_model, test_loader, device)
-    R, p_val = get_R(pred, gt)[0]
-    pred.var["p_val"] = p_val
-    pred.var["-log10p_val"] = -np.log10(p_val)
-    print('Pearson Correlation:', np.nanmean(R))
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # pred, gt = pred(best_model, test_loader, device)
+    # R, p_val = get_R(pred, gt)[0]
+    # pred.var["p_val"] = p_val
+    # pred.var["-log10p_val"] = -np.log10(p_val)
+    # print('Pearson Correlation:', np.nanmean(R))
     
     # if label is not None:
     #     clus, ARI = cluster(pred, label)
@@ -225,7 +226,7 @@ def train(args, vit_dataset=ViT_HEST1K, epochs=300, modelsave_address="model",
     torch.save(best_model.state_dict(), final_save_path)
     print(f"Final model saved to {final_save_path}")
     
-    return pred, gt, R, p_val
+    # return pred, gt, R, p_val
 
 def validate(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k", gene_list="3CA", checkpoint_path=None, num_workers=16, gpus=1, neighbours=5, prune="NA", batch_size=1):
     n_genes = GENE_LISTS[gene_list]["n_genes"]
@@ -247,25 +248,7 @@ def validate(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k
     print('Validation Pearson Correlation:', np.nanmean(R))
     return pred, gt, R, p_val
 
-def run_test_phase(vit_dataset=ViT_HEST1K, model_address="model", dataset_name="hest1k", gene_list="3CA", checkpoint_path=None, num_workers=16, gpus=1, neighbours=5, prune="NA", batch_size=1):
-    n_genes = GENE_LISTS[gene_list]["n_genes"]
-    # Load test dataset
-    testset = vit_dataset(mode='test', flatten=False, adj=True, ori=True, prune=prune, neighs=neighbours, gene_list=gene_list)
-    test_loader = DataLoader(testset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
-    # Load model
-    if checkpoint_path is None:
-        checkpoint_path = os.path.join(model_address, f"last_train_{gene_list}_{dataset_name}_{n_genes}.ckpt")
-    print(f"Loading model from: {checkpoint_path}")
-    model = Hist2ST.load_from_checkpoint(checkpoint_path)
-    # Run predictions
-    device = 'cuda' if gpus > 0 and torch.cuda.is_available() else 'cpu'
-    pred, gt = test(model, test_loader, device)
-    R, p_val = get_R(pred, gt)[0]
-    if hasattr(pred, "var"):
-        pred.var["p_val"] = p_val
-        pred.var["-log10p_val"] = -np.log10(p_val)
-    print('Test Pearson Correlation:', np.nanmean(R))
-    return pred, gt, R, p_val
+
 
 if __name__ == "__main__":
     print(f"Script started on: {date.today().strftime('%Y-%m-%d')}")
@@ -325,79 +308,58 @@ if __name__ == "__main__":
     print(f"  Batch Size: {args.batch_size}")
     print(f"  Model Directory: {args.model_dir}")
     
+    # Parse tag parameters
+    kernel, patch, depth1, depth2, depth3, heads, channel = map(int, args.tag.split('-'))
+    # Get number of genes from config
+    n_genes = GENE_LISTS[args.gene_list]["n_genes"]
     
-    results = {}
+    if args.gene_list not in GENE_LISTS:
+        raise ValueError(f"Unknown gene list: {args.gene_list}")
+          
+    model = Hist2ST(
+        depth1=depth1, depth2=depth2, depth3=depth3,
+        n_genes=n_genes, learning_rate=args.learning_rate,
+        kernel_size=kernel, patch_size=patch,
+        heads=heads, channel=channel, dropout=args.dropout,
+        zinb=0.25, nb=False,
+        bake=0, lamb=0, 
+    )
     
-    if args.mode in ['train', 'train_test', 'all']:
-        print("\n" + "="*50)
-        print("TRAINING PHASE")
-        print("="*50)
-        
-        pred_train, gt_train, R_train, p_val_train = train(
-            args,
-            vit_dataset=vit_dataset,
-            epochs=args.epochs,
-            modelsave_address=args.model_dir,
-            gene_list=args.gene_list,
-            num_workers=args.num_workers,
-            gpus=args.gpus,
-            strategy=args.strategy,
-            learning_rate=args.learning_rate,
-            batch_size=args.batch_size,
-            patience=args.patience,
-            tag=args.tag,
-            prune=args.prune,
-            neighbors=args.neighbors,
-            dropout=args.dropout
-        )
-        results['training'] = (pred_train, gt_train, R_train, p_val_train)
-        print(f"Training completed. Mean correlation: {np.nanmean(R_train):.4f}")
-        
-    if args.mode in ['validate', 'all']:
-        print("\n" + "="*50)
-        print("VALIDATION PHASE")
-        print("="*50)
-        
-        pred_val, gt_val, R_val, p_val_val = validate(
-            vit_dataset=vit_dataset,
-            model_address=args.model_dir,
-            dataset_name=args.dataset.lower(),
-            gene_list=args.gene_list,
-            checkpoint_path=args.checkpoint_path,
-            num_workers=args.num_workers,
-            gpus=args.gpus
-        )
-        
-        results['validation'] = (pred_val, gt_val, R_val, p_val_val)
-        print(f"Validation completed. Mean correlation: {np.nanmean(R_val):.4f}")
+    # results = {}
+    print("\n" + "="*50)
+    print("TRAINING PHASE")
+    print("="*50)
     
-    if args.mode in ['test', 'train_test', 'all']:
-        print("\n" + "="*50)
-        print("TESTING PHASE")
-        print("="*50)
-        
-        pred_test, gt_test, R_test, p_val_test = run_test_phase(
-            vit_dataset=vit_dataset,
-            model_address=args.model_dir,
-            dataset_name=args.dataset.lower(),
-            gene_list=args.gene_list,
-            checkpoint_path=args.checkpoint_path,
-            num_workers=args.num_workers,
-            gpus=args.gpus
-        )
-        
-        results['testing'] = (pred_test, gt_test, R_test, p_val_test)
-        print(f"Testing completed. Mean correlation: {np.nanmean(R_test):.4f}")
+    # Add auto-resume by default
+    args.resume = True  # Auto-enable resume
     
-    # Print final summary if multiple phases were run
-    if len(results) > 1:
-        print("\n" + "="*50)
-        print("FINAL RESULTS SUMMARY")
-        print("="*50)
+    train(
+        args,
+        model,
+        vit_dataset=vit_dataset,
+        epochs=args.epochs,
+        modelsave_address=args.model_dir,
+        gene_list=args.gene_list,
+        num_workers=args.num_workers,
+        gpus=args.gpus,
+        strategy=args.strategy,
+        batch_size=args.batch_size,
+        patience=args.patience,
+        prune=args.prune,
+        neighbors=args.neighbors,
+        tag = args.tag
+    )
+    # results['training'] = (pred_train, gt_train, R_train, p_val_train)
+    # print(f"Training completed. Mean correlation: {np.nanmean(R_train):.4f}")
+    
+    # if len(results) > 1:
+    #     print("\n" + "="*50)
+    #     print("FINAL RESULTS SUMMARY")
+    #     print("="*50)
         
-        if 'training' in results:
-            print(f"Training Correlation:   {np.nanmean(results['training'][2]):.4f}")
-        if 'validation' in results:
-            print(f"Validation Correlation: {np.nanmean(results['validation'][2]):.4f}")
-        if 'testing' in results:
-            print(f"Test Correlation:       {np.nanmean(results['testing'][2]):.4f}")
+    #     if 'training' in results:
+    #         print(f"Training Correlation:   {np.nanmean(results['training'][2]):.4f}")
+    #     if 'validation' in results:
+    #         print(f"Validation Correlation: {np.nanmean(results['validation'][2]):.4f}")
+    #     if 'testing' in results:
+    #         print(f"Test Correlation:       {np.nanmean(results['testing'][2]):.4f}")

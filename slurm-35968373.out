@@ -1,0 +1,2126 @@
+2025-08-10 12:33:30.408836: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-08-10 12:33:30.447580: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX512F AVX512_VNNI, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Using 16bit Automatic Mixed Precision (AMP)
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+HPU available: False, using: 0 HPUs
+Initializing distributed: GLOBAL_RANK: 0, MEMBER: 1/1
+[W810 12:33:38.492179678 CUDAAllocatorConfig.h:28] Warning: expandable_segments not supported on this platform (function operator())
+----------------------------------------------------------------------------------------------------
+distributed_backend=nccl
+All distributed processes registered. Starting with 1 processes
+----------------------------------------------------------------------------------------------------
+
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0,1]
+
+  | Name            | Type       | Params | Mode 
+-------------------------------------------------------
+0 | patch_embedding | Conv2d     | 2.4 K  | train
+1 | x_embed         | Embedding  | 32.8 K | train
+2 | y_embed         | Embedding  | 32.8 K | train
+3 | vit             | ViT        | 11.0 M | train
+4 | mean            | Sequential | 1.5 M  | train
+5 | disp            | Sequential | 1.5 M  | train
+6 | pi              | Sequential | 1.5 M  | train
+7 | coef            | Sequential | 263 K  | train
+8 | gene_head       | Sequential | 1.5 M  | train
+-------------------------------------------------------
+17.5 M    Trainable params
+0         Non-trainable params
+17.5 M    Total params
+69.899    Total estimated model params size (MB)
+117       Modules in train mode
+0         Modules in eval mode
+SLURM auto-requeueing enabled. Setting signal handlers.
+[easydl] tensorflow not available!
+Script started on: 2025-08-10
+CUDA available: True
+Number of GPUs: 2
+GPU 0: NVIDIA A100 80GB PCIe
+GPU 0 Memory: 79.3 GB
+GPU 1: NVIDIA A100 80GB PCIe
+GPU 1 Memory: 79.3 GB
+Configuration:
+  Mode: train_test
+  Dataset: HEST1K
+  Gene List: 3CA
+  GPUs: 2
+  Num Workers: 1
+  Strategy: ddp
+  Epochs: 10
+  Learning Rate: 1e-05
+  Batch Size: 1
+  Model Directory: model
+
+==================================================
+TRAINING PHASE
+==================================================
+Found processed path: ../../data/HERST_preprocess/3CA_genes/train with 421 samples
+Found 421 samples ids.
+Found processed path: ../../data/HERST_preprocess/3CA_genes/val with 123 samples
+Found 123 samples ids.
+Found processed path: ../../data/HERST_preprocess/3CA_genes/test with 61 samples
+Found 61 samples ids.
+VAL Start GPU 0 Memory:
+  Allocated: 0.13 GB
+  Reserved:  0.15 GB
+  Max Allocated: 0.13 GB
+  Max Reserved:  0.15 GB
+VAL End GPU 0 Memory:
+  Allocated: 0.14 GB
+  Reserved:  1.02 GB
+  Max Allocated: 0.93 GB
+  Max Reserved:  1.02 GB
+TRAIN Start GPU 0 Memory:
+  Allocated: 0.14 GB
+  Reserved:  0.17 GB
+  Max Allocated: 0.93 GB
+  Max Reserved:  1.02 GB
+Training started at: 2025-08-10 12:33:54
+TRAIN Epoch 0 Start GPU 0 Memory:
+  Allocated: 0.14 GB
+  Reserved:  0.17 GB
+  Max Allocated: 0.14 GB
+  Max Reserved:  0.17 GB
+Epoch 0 started at: 12:33:54
+TRAIN Batch 0 GPU 0 Memory:
+  Allocated: 0.22 GB
+  Reserved:  0.33 GB
+  Max Allocated: 0.25 GB
+  Max Reserved:  0.33 GB
+TRAIN Batch 10 GPU 0 Memory:
+  Allocated: 0.60 GB
+  Reserved:  4.62 GB
+  Max Allocated: 15.27 GB
+  Max Reserved:  18.33 GB
+TRAIN Batch 20 GPU 0 Memory:
+  Allocated: 0.29 GB
+  Reserved:  9.34 GB
+  Max Allocated: 15.27 GB
+  Max Reserved:  18.33 GB
+TRAIN Batch 30 GPU 0 Memory:
+  Allocated: 0.84 GB
+  Reserved:  4.43 GB
+  Max Allocated: 15.27 GB
+  Max Reserved:  18.33 GB
+TRAIN Batch 40 GPU 0 Memory:
+  Allocated: 0.46 GB
+  Reserved:  21.28 GB
+  Max Allocated: 17.75 GB
+  Max Reserved:  21.28 GB
+TRAIN Batch 50 GPU 0 Memory:
+  Allocated: 0.42 GB
+  Reserved:  6.38 GB
+  Max Allocated: 17.75 GB
+  Max Reserved:  21.28 GB
+TRAIN Batch 60 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  7.30 GB
+  Max Allocated: 17.75 GB
+  Max Reserved:  21.28 GB
+TRAIN Batch 70 GPU 0 Memory:
+  Allocated: 0.75 GB
+  Reserved:  2.77 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 80 GPU 0 Memory:
+  Allocated: 0.55 GB
+  Reserved:  4.28 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 90 GPU 0 Memory:
+  Allocated: 0.67 GB
+  Reserved:  7.29 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 100 GPU 0 Memory:
+  Allocated: 0.40 GB
+  Reserved:  9.56 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 110 GPU 0 Memory:
+  Allocated: 0.41 GB
+  Reserved:  6.10 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 120 GPU 0 Memory:
+  Allocated: 1.23 GB
+  Reserved:  9.22 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 130 GPU 0 Memory:
+  Allocated: 0.45 GB
+  Reserved:  7.04 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 140 GPU 0 Memory:
+  Allocated: 0.87 GB
+  Reserved:  5.23 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 150 GPU 0 Memory:
+  Allocated: 0.38 GB
+  Reserved:  18.59 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 160 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  3.79 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 170 GPU 0 Memory:
+  Allocated: 0.55 GB
+  Reserved:  4.53 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 180 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  7.17 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 190 GPU 0 Memory:
+  Allocated: 0.38 GB
+  Reserved:  4.99 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 200 GPU 0 Memory:
+  Allocated: 0.41 GB
+  Reserved:  2.29 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 210 GPU 0 Memory:
+  Allocated: 0.78 GB
+  Reserved:  3.07 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Epoch 0 End GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  0.95 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+Epoch 0 completed in: 24.0 minutes
+Average epoch time: 24.0 minutes
+Estimated remaining time: 3.6 hours (ETA: 2025-08-10 16:33:48)
+--------------------------------------------------
+TRAIN Epoch 1 Start GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  0.50 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+Epoch 1 started at: 12:57:54
+
+Processing sample SPA48
+
+Processing sample SPA120
+
+Processing sample MISC40
+
+Processing sample SPA44
+
+Processing sample NCBI767
+
+Processing sample TENX94
+
+Processing sample MEND89
+
+Processing sample MEND39
+
+Processing sample TENX68
+
+Processing sample TENX28
+
+Processing sample TENX119
+
+Processing sample MEND54
+
+Processing sample NCBI461
+
+Processing sample NCBI762
+
+Processing sample SPA116
+
+Processing sample SPA85
+
+Processing sample NCBI637
+
+Processing sample NCBI471
+
+Processing sample SPA118
+
+Processing sample TENX114
+
+Processing sample NCBI538
+
+Processing sample NCBI4
+
+Processing sample SPA95
+
+Processing sample SPA146
+
+Processing sample SPA121
+
+Processing sample SPA80
+
+Processing sample MEND162
+
+Processing sample MEND150
+
+Processing sample SPA138
+
+Processing sample MISC16
+
+Processing sample NCBI771
+
+Processing sample MEND59
+
+Processing sample NCBI708
+
+Processing sample NCBI870
+
+Processing sample MISC56
+
+Processing sample TENX153
+
+Processing sample MEND13
+
+Processing sample NCBI814
+
+Processing sample TENX125
+
+Processing sample SPA89
+
+Processing sample SPA127
+
+Processing sample NCBI464
+
+Processing sample NCBI591
+
+Processing sample NCBI681
+
+Processing sample NCBI490
+
+Processing sample SPA109
+
+Processing sample SPA137
+
+Processing sample INT24
+
+Processing sample ZEN44
+
+Processing sample NCBI883
+
+Processing sample NCBI521
+
+Processing sample NCBI484
+
+Processing sample MISC35
+
+Processing sample SPA59
+
+Processing sample ZEN46
+
+Processing sample SPA134
+
+Processing sample INT9
+
+Processing sample NCBI833
+
+Processing sample INT21
+
+Processing sample NCBI539
+
+Processing sample SPA102
+
+Processing sample TENX99
+
+Processing sample NCBI768
+
+Processing sample NCBI631
+
+Processing sample TENX118
+
+Processing sample NCBI482
+
+Processing sample NCBI602
+
+Processing sample NCBI517
+
+Processing sample SPA1
+
+Processing sample NCBI875
+
+Processing sample INT7
+
+Processing sample NCBI522
+
+Processing sample MEND139
+
+Processing sample MEND8
+
+Processing sample TENX116
+
+Processing sample NCBI636
+
+Processing sample MISC33
+
+Processing sample NCBI763
+
+Processing sample NCBI876
+
+Processing sample NCBI571
+
+Processing sample NCBI463
+
+Processing sample SPA150
+
+Processing sample SPA110
+
+Processing sample NCBI855
+
+Processing sample NCBI629
+
+Processing sample MEND152
+
+Processing sample TENX65
+
+Processing sample TENX50
+
+Processing sample NCBI506
+
+Processing sample TENX56
+
+Processing sample MEND64
+
+Processing sample MEND86
+
+Processing sample MISC50
+
+Processing sample TENX111
+
+Processing sample SPA151
+
+Processing sample SPA91
+
+Processing sample NCBI696
+
+Processing sample INT16
+
+Processing sample NCBI537
+
+Processing sample TENX72
+
+Processing sample ZEN45
+
+Processing sample NCBI828
+
+Processing sample SPA60
+
+Processing sample TENX156
+
+Processing sample TENX141
+
+Processing sample NCBI564
+
+Processing sample SPA86
+
+Processing sample INT13
+
+Processing sample SPA112
+
+Processing sample NCBI690
+
+Processing sample MEND49
+
+Processing sample NCBI821
+
+Processing sample NCBI535
+
+Processing sample SPA145
+
+Processing sample NCBI630
+
+Processing sample SPA123
+
+Processing sample TENX71
+
+Processing sample NCBI485
+
+Processing sample MISC46
+
+Processing sample INT6
+
+Processing sample TENX53
+
+Processing sample MISC55
+
+Processing sample SPA142
+
+Processing sample TENX30
+
+Processing sample MISC39
+
+Processing sample NCBI866
+
+Processing sample NCBI654
+
+Processing sample NCBI713
+
+Processing sample NCBI882
+
+Processing sample SPA57
+
+Processing sample NCBI481
+
+Processing sample NCBI572
+
+Processing sample MISC65
+
+Processing sample SPA154
+
+Processing sample TENX16
+
+Processing sample SPA126
+
+Processing sample SPA131
+
+Processing sample SPA104
+
+Processing sample TENX120
+
+Processing sample MISC58
+
+Processing sample NCBI638
+
+Processing sample TENX96
+
+Processing sample SPA82
+
+Processing sample NCBI492
+
+Processing sample MISC17
+
+Processing sample NCBI710
+
+Processing sample NCBI674
+
+Processing sample TENX121
+
+Processing sample NCBI467
+
+Processing sample NCBI707
+
+Processing sample SPA39
+
+Processing sample MISC48
+
+Processing sample MISC3
+
+Processing sample MEND33
+
+Processing sample SPA56
+
+Processing sample NCBI536
+
+Processing sample MISC71
+
+Processing sample SPA147
+
+Processing sample NCBI593
+
+Processing sample SPA143
+
+Processing sample SPA111
+
+Processing sample MISC70
+
+Processing sample SPA107
+
+Processing sample INT26
+
+Processing sample SPA53
+
+Processing sample MISC6
+
+Processing sample MEND156
+
+Processing sample SPA144
+
+Processing sample NCBI704
+
+Processing sample SPA141
+
+Processing sample NCBI628
+
+Processing sample MEND85
+
+Processing sample NCBI503
+
+Processing sample SPA100
+
+Processing sample NCBI474
+
+Processing sample SPA90
+
+Processing sample INT15
+
+Processing sample SPA61
+
+Processing sample TENX142
+
+Processing sample SPA34
+
+Processing sample SPA133
+
+Processing sample NCBI1
+
+Processing sample MEND62
+
+Processing sample NCBI783
+
+Processing sample INT17
+
+Processing sample MISC7
+
+Processing sample MEND9
+
+Processing sample NCBI478
+
+Processing sample NCBI508
+
+Processing sample TENX62
+
+Processing sample MISC52
+
+Processing sample NCBI495
+
+Processing sample NCBI567
+
+Processing sample NCBI562
+
+Processing sample INT4
+
+Processing sample NCBI856
+
+Processing sample SPA153
+
+Processing sample NCBI703
+
+Processing sample NCBI879
+
+Processing sample NCBI811
+
+Processing sample NCBI698
+
+Processing sample MEND95
+
+Processing sample SPA73
+
+Processing sample SPA40
+
+Processing sample MISC42
+
+Processing sample NCBI487
+
+Processing sample ZEN36
+
+Processing sample MEND66
+
+Processing sample NCBI695
+
+Processing sample NCBI711
+
+Processing sample MISC67
+TRAIN Batch 0 GPU 0 Memory:
+  Allocated: 0.61 GB
+  Reserved:  1.97 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 10 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  24.02 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 20 GPU 0 Memory:
+  Allocated: 0.47 GB
+  Reserved:  23.82 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 30 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  5.08 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 40 GPU 0 Memory:
+  Allocated: 1.02 GB
+  Reserved:  4.90 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 50 GPU 0 Memory:
+  Allocated: 0.42 GB
+  Reserved:  1.75 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 60 GPU 0 Memory:
+  Allocated: 0.45 GB
+  Reserved:  4.18 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 70 GPU 0 Memory:
+  Allocated: 0.38 GB
+  Reserved:  6.38 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 80 GPU 0 Memory:
+  Allocated: 0.46 GB
+  Reserved:  5.85 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 90 GPU 0 Memory:
+  Allocated: 1.12 GB
+  Reserved:  6.10 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 100 GPU 0 Memory:
+  Allocated: 1.07 GB
+  Reserved:  5.64 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 110 GPU 0 Memory:
+  Allocated: 0.45 GB
+  Reserved:  7.08 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 120 GPU 0 Memory:
+  Allocated: 0.92 GB
+  Reserved:  4.91 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 130 GPU 0 Memory:
+  Allocated: 0.57 GB
+  Reserved:  7.27 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 140 GPU 0 Memory:
+  Allocated: 2.15 GB
+  Reserved:  17.88 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 150 GPU 0 Memory:
+  Allocated: 1.24 GB
+  Reserved:  18.46 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 160 GPU 0 Memory:
+  Allocated: 0.42 GB
+  Reserved:  9.82 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 170 GPU 0 Memory:
+  Allocated: 0.36 GB
+  Reserved:  5.98 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 180 GPU 0 Memory:
+  Allocated: 0.55 GB
+  Reserved:  7.28 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 190 GPU 0 Memory:
+  Allocated: 1.45 GB
+  Reserved:  9.38 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 200 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  2.76 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 210 GPU 0 Memory:
+  Allocated: 0.43 GB
+  Reserved:  5.91 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Epoch 1 End GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  0.54 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+Epoch 1 completed in: 24.7 minutes
+Average epoch time: 24.3 minutes
+Estimated remaining time: 3.2 hours (ETA: 2025-08-10 16:37:20)
+--------------------------------------------------
+TRAIN Epoch 2 Start GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  0.46 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+Epoch 2 started at: 13:22:35
+
+Processing sample NCBI636
+
+Processing sample INT26
+
+Processing sample MISC21
+
+Processing sample INT8
+
+Processing sample MEND96
+
+Processing sample NCBI539
+
+Processing sample TENX123
+
+Processing sample INT13
+
+Processing sample SPA60
+
+Processing sample SPA127
+
+Processing sample NCBI489
+
+Processing sample TENX147
+
+Processing sample SPA88
+
+Processing sample INT10
+
+Processing sample MISC9
+
+Processing sample TENX111
+
+Processing sample TENX96
+
+Processing sample TENX73
+
+Processing sample SPA138
+
+Processing sample SPA86
+
+Processing sample MEND52
+
+Processing sample TENX28
+
+Processing sample NCBI710
+
+Processing sample NCBI564
+
+Processing sample SPA96
+
+Processing sample MEND68
+
+Processing sample NCBI4
+
+Processing sample NCBI657
+
+Processing sample MEND87
+
+Processing sample INT6
+
+Processing sample SPA130
+
+Processing sample MISC17
+
+Processing sample MISC64
+
+Processing sample NCBI639
+
+Processing sample NCBI483
+
+Processing sample NCBI821
+
+Processing sample NCBI815
+
+Processing sample SPA123
+
+Processing sample NCBI538
+
+Processing sample SPA65
+
+Processing sample INT22
+
+Processing sample NCBI537
+
+Processing sample MISC23
+
+Processing sample MISC62
+
+Processing sample NCBI704
+
+Processing sample TENX91
+
+Processing sample NCBI694
+
+Processing sample MEND15
+
+Processing sample SPA61
+
+Processing sample SPA107
+
+Processing sample SPA57
+
+Processing sample NCBI599
+
+Processing sample SPA90
+
+Processing sample MISC33
+
+Processing sample MEND150
+
+Processing sample SPA80
+
+Processing sample MISC20
+
+Processing sample TENX119
+
+Processing sample MISC52
+
+Processing sample SPA74
+
+Processing sample NCBI696
+
+Processing sample SPA1
+
+Processing sample SPA139
+
+Processing sample MISC18
+
+Processing sample MISC7
+
+Processing sample ZEN39
+
+Processing sample MISC46
+
+Processing sample NCBI569
+
+Processing sample MISC57
+
+Processing sample MISC51
+
+Processing sample SPA32
+
+Processing sample TENX62
+
+Processing sample NCBI859
+
+Processing sample ZEN46
+
+Processing sample MISC6
+
+Processing sample TENX56
+
+Processing sample SPA137
+
+Processing sample TENX149
+
+Processing sample NCBI522
+
+Processing sample MISC12
+
+Processing sample NCBI498
+
+Processing sample MISC25
+
+Processing sample MISC29
+
+Processing sample MEND13
+
+Processing sample SPA55
+
+Processing sample SPA72
+
+Processing sample NCBI771
+
+Processing sample MEND37
+
+Processing sample NCBI503
+
+Processing sample NCBI630
+
+Processing sample TENX148
+
+Processing sample NCBI628
+
+Processing sample MEND64
+
+Processing sample NCBI684
+
+Processing sample NCBI883
+
+Processing sample NCBI711
+
+Processing sample NCBI470
+
+Processing sample SPA52
+
+Processing sample MISC31
+
+Processing sample SPA0
+
+Processing sample MISC40
+
+Processing sample NCBI763
+
+Processing sample SPA79
+
+Processing sample MEND22
+
+Processing sample NCBI634
+
+Processing sample MEND33
+
+Processing sample TENX65
+
+Processing sample TENX53
+
+Processing sample NCBI867
+
+Processing sample TENX116
+
+Processing sample NCBI695
+
+Processing sample NCBI870
+
+Processing sample NCBI477
+
+Processing sample MISC2
+
+Processing sample TENX27
+
+Processing sample MEND8
+
+Processing sample MISC69
+
+Processing sample SPA124
+
+Processing sample SPA110
+
+Processing sample ZEN42
+
+Processing sample MEND35
+
+Processing sample NCBI485
+
+Processing sample SPA48
+
+Processing sample NCBI3
+
+Processing sample ZEN49
+
+Processing sample SPA126
+
+Processing sample TENX68
+
+Processing sample NCBI833
+
+Processing sample NCBI700
+
+Processing sample NCBI472
+
+Processing sample NCBI691
+
+Processing sample NCBI508
+
+Processing sample SPA76
+
+Processing sample NCBI594
+
+Processing sample TENX30
+
+Processing sample SPA85
+
+Processing sample NCBI766
+
+Processing sample NCBI880
+
+Processing sample MEND154
+
+Processing sample ZEN38
+
+Processing sample TENX121
+
+Processing sample MEND39
+
+Processing sample MEND49
+
+Processing sample MISC43
+
+Processing sample SPA38
+
+Processing sample MISC53
+
+Processing sample MISC14
+
+Processing sample TENX94
+
+Processing sample MEND51
+
+Processing sample MISC27
+
+Processing sample NCBI827
+
+Processing sample SPA82
+
+Processing sample NCBI856
+
+Processing sample NCBI635
+
+Processing sample MEND7
+
+Processing sample INT17
+
+Processing sample MISC10
+
+Processing sample TENX72
+
+Processing sample SPA101
+
+Processing sample SPA143
+
+Processing sample SPA68
+
+Processing sample TENX16
+
+Processing sample NCBI593
+
+Processing sample SPA141
+
+Processing sample INT16
+
+Processing sample SPA56
+
+Processing sample MISC50
+
+Processing sample TENX142
+
+Processing sample NCBI713
+
+Processing sample MISC41
+
+Processing sample SPA43
+
+Processing sample MISC59
+
+Processing sample SPA118
+
+Processing sample MEND144
+
+Processing sample NCBI675
+
+Processing sample SPA104
+
+Processing sample NCBI681
+
+Processing sample SPA111
+
+Processing sample NCBI708
+
+Processing sample TENX117
+
+Processing sample NCBI463
+
+Processing sample MEND148
+
+Processing sample MEND59
+
+Processing sample NCBI638
+
+Processing sample NCBI776
+
+Processing sample MISC63
+
+Processing sample SPA95
+
+Processing sample MISC61
+
+Processing sample NCBI819
+
+Processing sample MISC1
+
+Processing sample TENX114
+
+Processing sample NCBI487
+
+Processing sample TENX24
+
+Processing sample NCBI535
+
+Processing sample SPA59
+
+Processing sample MEND146
+
+Processing sample TENX155
+
+Processing sample NCBI488
+
+Processing sample SPA54
+
+Processing sample MEND19
+
+Processing sample SPA121
+
+Processing sample NCBI479
+
+Processing sample INT23
+
+Processing sample INT21
+
+Processing sample NCBI492
+
+Processing sample NCBI471
+
+Processing sample SPA145
+
+Processing sample MEND61
+
+Processing sample NCBI602
+
+Processing sample NCBI591
+
+Processing sample SPA119
+TRAIN Batch 0 GPU 0 Memory:
+  Allocated: 0.43 GB
+  Reserved:  1.00 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 10 GPU 0 Memory:
+  Allocated: 0.96 GB
+  Reserved:  4.43 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 20 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  1.91 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 30 GPU 0 Memory:
+  Allocated: 0.41 GB
+  Reserved:  5.06 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 40 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  5.78 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 50 GPU 0 Memory:
+  Allocated: 0.40 GB
+  Reserved:  4.51 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 60 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  6.11 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 70 GPU 0 Memory:
+  Allocated: 0.37 GB
+  Reserved:  4.64 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 80 GPU 0 Memory:
+  Allocated: 0.37 GB
+  Reserved:  7.28 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 90 GPU 0 Memory:
+  Allocated: 0.93 GB
+  Reserved:  4.23 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 100 GPU 0 Memory:
+  Allocated: 0.68 GB
+  Reserved:  5.86 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 110 GPU 0 Memory:
+  Allocated: 0.66 GB
+  Reserved:  4.95 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 120 GPU 0 Memory:
+  Allocated: 0.68 GB
+  Reserved:  7.29 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 130 GPU 0 Memory:
+  Allocated: 0.86 GB
+  Reserved:  6.11 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 140 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  7.21 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 150 GPU 0 Memory:
+  Allocated: 1.20 GB
+  Reserved:  7.25 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 160 GPU 0 Memory:
+  Allocated: 0.41 GB
+  Reserved:  7.04 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 170 GPU 0 Memory:
+  Allocated: 2.14 GB
+  Reserved:  18.47 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 180 GPU 0 Memory:
+  Allocated: 0.46 GB
+  Reserved:  2.62 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.37 GB
+TRAIN Batch 190 GPU 0 Memory:
+  Allocated: 0.44 GB
+  Reserved:  11.92 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 200 GPU 0 Memory:
+  Allocated: 0.37 GB
+  Reserved:  4.45 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 210 GPU 0 Memory:
+  Allocated: 1.05 GB
+  Reserved:  27.81 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Epoch 2 End GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  1.17 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+Epoch 2 completed in: 26.8 minutes
+Average epoch time: 25.2 minutes
+Estimated remaining time: 2.9 hours (ETA: 2025-08-10 16:45:39)
+--------------------------------------------------
+TRAIN Epoch 3 Start GPU 0 Memory:
+  Allocated: 0.34 GB
+  Reserved:  0.46 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+Epoch 3 started at: 13:49:26
+
+Processing sample NCBI493
+
+Processing sample INT21
+
+Processing sample MISC61
+
+Processing sample NCBI820
+
+Processing sample NCBI766
+
+Processing sample SPA34
+
+Processing sample NCBI498
+
+Processing sample NCBI882
+
+Processing sample SPA55
+
+Processing sample SPA148
+
+Processing sample NCBI867
+
+Processing sample TENX30
+
+Processing sample MISC62
+
+Processing sample SPA120
+
+Processing sample NCBI636
+
+Processing sample TENX24
+
+Processing sample NCBI564
+
+Processing sample MISC44
+
+Processing sample MEND65
+
+Processing sample MEND66
+
+Processing sample SPA76
+
+Processing sample TENX149
+
+Processing sample TENX111
+
+Processing sample NCBI707
+
+Processing sample SPA104
+
+Processing sample MEND15
+
+Processing sample MEND1
+
+Processing sample MEND157
+
+Processing sample NCBI657
+
+Processing sample MEND62
+
+Processing sample SPA53
+
+Processing sample MISC36
+
+Processing sample MEND154
+
+Processing sample MISC4
+
+Processing sample NCBI704
+
+Processing sample TENX121
+
+Processing sample NCBI714
+
+Processing sample SPA44
+
+Processing sample SPA154
+
+Processing sample NCBI785
+
+Processing sample NCBI482
+
+Processing sample NCBI881
+
+Processing sample TENX155
+
+Processing sample MISC12
+
+Processing sample MISC6
+
+Processing sample MISC70
+
+Processing sample MEND9
+
+Processing sample INT7
+
+Processing sample MEND156
+
+Processing sample TENX118
+
+Processing sample SPA80
+
+Processing sample MISC59
+
+Processing sample SPA127
+
+Processing sample SPA56
+
+Processing sample TENX105
+
+Processing sample SPA150
+
+Processing sample NCBI490
+
+Processing sample TENX65
+
+Processing sample NCBI855
+
+Processing sample NCBI506
+
+Processing sample SPA61
+
+Processing sample NCBI518
+
+Processing sample MEND48
+
+Processing sample NCBI879
+
+Processing sample MISC40
+
+Processing sample TENX29
+
+Processing sample NCBI481
+
+Processing sample NCBI763
+
+Processing sample SPA95
+
+Processing sample MISC69
+
+Processing sample SPA31
+
+Processing sample MISC46
+
+Processing sample NCBI711
+
+Processing sample SPA125
+
+Processing sample NCBI866
+
+Processing sample SPA43
+
+Processing sample NCBI571
+
+Processing sample MEND37
+
+Processing sample NCBI633
+
+Processing sample NCBI827
+
+Processing sample SPA138
+
+Processing sample SPA64
+
+Processing sample TENX116
+
+Processing sample TENX144
+
+Processing sample SPA96
+
+Processing sample NCBI638
+
+Processing sample NCBI691
+
+Processing sample SPA112
+
+Processing sample SPA73
+
+Processing sample INT11
+
+Processing sample MEND96
+
+Processing sample MEND91
+
+Processing sample TENX114
+
+Processing sample SPA143
+
+Processing sample NCBI713
+
+Processing sample SPA52
+
+Processing sample NCBI876
+
+Processing sample TENX62
+
+Processing sample MEND61
+
+Processing sample NCBI467
+
+Processing sample TENX153
+
+Processing sample NCBI473
+
+Processing sample MISC65
+
+Processing sample MEND19
+
+Processing sample MISC55
+
+Processing sample TENX132
+
+Processing sample INT22
+
+Processing sample MISC7
+
+Processing sample TENX119
+
+Processing sample MEND52
+
+Processing sample NCBI811
+
+Processing sample SPA144
+
+Processing sample SPA84
+
+Processing sample NCBI629
+
+Processing sample SPA83
+
+Processing sample MISC56
+
+Processing sample MEND41
+
+Processing sample NCBI635
+
+Processing sample SPA134
+
+Processing sample NCBI684
+
+Processing sample NCBI464
+
+Processing sample SPA72
+
+Processing sample SPA38
+
+Processing sample NCBI632
+
+Processing sample NCBI517
+
+Processing sample MEND33
+
+Processing sample INT13
+
+Processing sample SPA146
+
+Processing sample SPA88
+
+Processing sample MEND49
+
+Processing sample MISC71
+
+Processing sample NCBI702
+
+Processing sample MISC21
+
+Processing sample MISC3
+
+Processing sample MISC20
+
+Processing sample TENX147
+
+Processing sample SPA131
+
+Processing sample INT19
+
+Processing sample SPA86
+
+Processing sample MEND36
+
+Processing sample SPA115
+
+Processing sample MEND86
+
+Processing sample INT17
+
+Processing sample NCBI634
+
+Processing sample MISC130
+
+Processing sample SPA124
+
+Processing sample NCBI673
+
+Processing sample NCBI2
+
+Processing sample MEND95
+
+Processing sample SPA102
+
+Processing sample MISC10
+
+Processing sample TENX73
+
+Processing sample ZEN36
+
+Processing sample NCBI828
+
+Processing sample SPA100
+
+Processing sample NCBI681
+
+Processing sample NCBI654
+
+Processing sample NCBI602
+
+Processing sample NCBI819
+
+Processing sample TENX120
+
+Processing sample SPA109
+
+Processing sample NCBI593
+
+Processing sample MEND141
+
+Processing sample SPA101
+
+Processing sample NCBI864
+
+Processing sample TENX71
+
+Processing sample NCBI475
+
+Processing sample NCBI599
+
+Processing sample SPA47
+
+Processing sample TENX46
+
+Processing sample TENX94
+
+Processing sample MEND139
+
+Processing sample INT26
+
+Processing sample SPA74
+
+Processing sample NCBI568
+
+Processing sample MISC39
+
+Processing sample ZEN46
+
+Processing sample MISC28
+
+Processing sample TENX68
+
+Processing sample MEND7
+
+Processing sample NCBI465
+
+Processing sample NCBI594
+
+Processing sample MEND152
+
+Processing sample TENX99
+
+Processing sample NCBI522
+
+Processing sample INT10
+
+Processing sample MISC41
+
+Processing sample TENX96
+
+Processing sample MISC45
+
+Processing sample MISC63
+
+Processing sample SPA130
+
+Processing sample TENX142
+
+Processing sample NCBI503
+
+Processing sample MISC17
+
+Processing sample NCBI708
+
+Processing sample NCBI483
+
+Processing sample NCBI569
+
+Processing sample INT12
+
+Processing sample NCBI486
+
+Processing sample MISC58
+
+Processing sample MEND13
+
+Processing sample TENX117
+
+Processing sample MEND39
+
+Processing sample SPA111
+
+Processing sample TENX50
+
+Processing sample SPA0
+
+Processing sample TENX95
+
+Processing sample SPA81
+
+Processing sample ZEN45
+
+Processing sample TENX16
+
+Processing sample MISC128
+
+Processing sample TENX91
+
+Processing sample NCBI636
+
+Processing sample NCBI470
+
+Processing sample TENX94
+
+Processing sample SPA54
+
+Processing sample INT16
+
+Processing sample MISC52
+
+Processing sample MISC43
+
+Processing sample SPA148
+
+Processing sample NCBI690
+
+Processing sample MISC10
+
+Processing sample SPA63
+
+Processing sample MEND19
+
+Processing sample SPA53
+
+Processing sample ZEN40
+
+Processing sample MISC61
+
+Processing sample MEND7
+
+Processing sample SPA133
+
+Processing sample NCBI567
+
+Processing sample SPA76
+
+Processing sample NCBI697
+
+Processing sample NCBI828
+
+Processing sample SPA85
+
+Processing sample NCBI562
+
+Processing sample SPA110
+
+Processing sample SPA102
+
+Processing sample NCBI565
+
+Processing sample SPA150
+
+Processing sample MISC48
+
+Processing sample SPA146
+
+Processing sample NCBI508
+
+Processing sample TENX24
+
+Processing sample MISC7
+
+Processing sample TENX147
+
+Processing sample SPA89
+
+Processing sample NCBI859
+
+Processing sample SPA96
+
+Processing sample MISC51
+
+Processing sample INT27
+
+Processing sample MISC65
+
+Processing sample NCBI681
+
+Processing sample TENX153
+
+Processing sample INT19
+
+Processing sample TENX125
+
+Processing sample NCBI594
+
+Processing sample NCBI630
+
+Processing sample MISC33
+
+Processing sample NCBI881
+
+Processing sample SPA40
+
+Processing sample MEND63
+
+Processing sample INT9
+
+Processing sample MISC130
+
+Processing sample NCBI833
+
+Processing sample MEND157
+
+Processing sample MISC62
+
+Processing sample MEND12
+
+Processing sample TENX73
+
+Processing sample MISC9
+
+Processing sample SPA142
+
+Processing sample MISC20
+
+Processing sample MEND9
+
+Processing sample NCBI483
+
+Processing sample MISC14
+
+Processing sample TENX28
+
+Processing sample NCBI637
+
+Processing sample SPA59
+
+Processing sample NCBI867
+
+Processing sample NCBI481
+
+Processing sample TENX120
+
+Processing sample TENX123
+
+Processing sample NCBI674
+
+Processing sample NCBI675
+
+Processing sample ZEN45
+
+Processing sample INT13
+
+Processing sample TENX50
+
+Processing sample MEND35
+
+Processing sample NCBI855
+
+Processing sample NCBI785
+
+Processing sample SPA72
+
+Processing sample MEND154
+
+Processing sample ZEN41
+
+Processing sample MISC6
+
+Processing sample MEND59
+
+Processing sample TENX65
+
+Processing sample TENX141
+
+Processing sample SPA151
+
+Processing sample SPA125
+
+Processing sample NCBI811
+
+Processing sample NCBI763
+
+Processing sample NCBI639
+
+Processing sample ZEN49
+
+Processing sample INT11
+
+Processing sample NCBI771
+
+Processing sample MISC12
+
+Processing sample MISC69
+
+Processing sample NCBI572
+
+Processing sample SPA138
+
+Processing sample MEND61
+
+Processing sample NCBI783
+
+Processing sample MEND95
+
+Processing sample NCBI880
+
+Processing sample SPA82
+
+Processing sample MISC40
+
+Processing sample NCBI711
+
+Processing sample NCBI506
+
+Processing sample NCBI521
+
+Processing sample SPA100
+
+Processing sample TENX53
+
+Processing sample MISC53
+
+Processing sample NCBI522
+
+Processing sample TENX16
+
+Processing sample NCBI707
+
+Processing sample MEND10
+
+Processing sample TENX72
+
+Processing sample MEND66
+
+Processing sample MISC71
+
+Processing sample TENX149
+
+Processing sample SPA73
+
+Processing sample SPA118
+
+Processing sample NCBI570
+
+Processing sample SPA31
+
+Processing sample NCBI575
+
+Processing sample NCBI634
+
+Processing sample NCBI704
+
+Processing sample MISC18
+
+Processing sample MEND13
+
+Processing sample NCBI698
+
+Processing sample NCBI2
+
+Processing sample SPA112
+
+Processing sample TENX27
+
+Processing sample MEND65
+
+Processing sample TENX98
+
+Processing sample SPA61
+
+Processing sample NCBI701
+
+Processing sample INT3
+
+Processing sample MEND147
+
+Processing sample TENX158
+
+Processing sample NCBI692
+TRAIN Batch 0 GPU 0 Memory:
+  Allocated: 1.52 GB
+  Reserved:  10.15 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 10 GPU 0 Memory:
+  Allocated: 1.20 GB
+  Reserved:  6.89 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 20 GPU 0 Memory:
+  Allocated: 0.39 GB
+  Reserved:  1.41 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 30 GPU 0 Memory:
+  Allocated: 0.41 GB
+  Reserved:  4.62 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 40 GPU 0 Memory:
+  Allocated: 1.24 GB
+  Reserved:  7.30 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 50 GPU 0 Memory:
+  Allocated: 0.63 GB
+  Reserved:  4.25 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 60 GPU 0 Memory:
+  Allocated: 0.37 GB
+  Reserved:  24.25 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 70 GPU 0 Memory:
+  Allocated: 1.24 GB
+  Reserved:  23.97 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 80 GPU 0 Memory:
+  Allocated: 0.63 GB
+  Reserved:  5.75 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 90 GPU 0 Memory:
+  Allocated: 0.72 GB
+  Reserved:  2.62 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 100 GPU 0 Memory:
+  Allocated: 0.54 GB
+  Reserved:  5.60 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 110 GPU 0 Memory:
+  Allocated: 1.06 GB
+  Reserved:  7.08 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 120 GPU 0 Memory:
+  Allocated: 0.37 GB
+  Reserved:  5.13 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+TRAIN Batch 130 GPU 0 Memory:
+  Allocated: 0.56 GB
+  Reserved:  7.29 GB
+  Max Allocated: 74.05 GB
+  Max Reserved:  74.39 GB
+OOM Error #1 detected: CUDA out of memory. Tried to allocate 20.26 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.85 GiB is free. Including non-PyTorch memory, this process has 73.39 GiB memory in use. Of the allocated memory 72.18 GiB is allocated by PyTorch, and 379.16 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Cleared CUDA cache after OOM
+Post-OOM Memory - Allocated: 20.58 GB, Reserved: 20.95 GB
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HEST_train.py", line 315, in <module>
+[rank0]:     train(
+[rank0]:   File "/work/bose_lab/Jamie/Summer/models/Hist2ST-Fork/HEST_train.py", line 153, in train
+[rank0]:     trainer.fit(model, train_loader, val_loader)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 561, in fit
+[rank0]:     call._call_and_handle_interrupt(
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/call.py", line 47, in _call_and_handle_interrupt
+[rank0]:     return trainer.strategy.launcher.launch(trainer_fn, *args, trainer=trainer, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/launchers/subprocess_script.py", line 105, in launch
+[rank0]:     return function(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 599, in _fit_impl
+[rank0]:     self._run(model, ckpt_path=ckpt_path)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1012, in _run
+[rank0]:     results = self._run_stage()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/trainer.py", line 1056, in _run_stage
+[rank0]:     self.fit_loop.run()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py", line 216, in run
+[rank0]:     self.advance()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py", line 455, in advance
+[rank0]:     self.epoch_loop.run(self._data_fetcher)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/training_epoch_loop.py", line 150, in run
+[rank0]:     self.advance(data_fetcher)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/training_epoch_loop.py", line 320, in advance
+[rank0]:     batch_output = self.automatic_optimization.run(trainer.optimizers[0], batch_idx, kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 185, in run
+[rank0]:     closure()
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 146, in __call__
+[rank0]:     self._result = self.closure(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/utils/_contextlib.py", line 116, in decorate_context
+[rank0]:     return func(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 140, in closure
+[rank0]:     self._backward_fn(step_output.closure_loss)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/loops/optimization/automatic.py", line 241, in backward_fn
+[rank0]:     call._call_strategy_hook(self.trainer, "backward", loss, optimizer)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/trainer/call.py", line 328, in _call_strategy_hook
+[rank0]:     output = fn(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/strategies/strategy.py", line 213, in backward
+[rank0]:     self.precision_plugin.backward(closure_loss, self.lightning_module, optimizer, *args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/plugins/precision/precision.py", line 73, in backward
+[rank0]:     model.backward(tensor, *args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/pytorch_lightning/core/module.py", line 1097, in backward
+[rank0]:     loss.backward(*args, **kwargs)
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/_tensor.py", line 581, in backward
+[rank0]:     torch.autograd.backward(
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/autograd/__init__.py", line 347, in backward
+[rank0]:     _engine_run_backward(
+[rank0]:   File "/home/jamie.macdonald2/software/miniforge3/envs/hist2st-env/lib/python3.9/site-packages/torch/autograd/graph.py", line 825, in _engine_run_backward
+[rank0]:     return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.26 GiB. GPU 0 has a total capacity of 79.25 GiB of which 5.85 GiB is free. Including non-PyTorch memory, this process has 73.39 GiB memory in use. Of the allocated memory 72.18 GiB is allocated by PyTorch, and 379.16 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

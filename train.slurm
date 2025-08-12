@@ -4,17 +4,15 @@
 #SBATCH --job-name=hist2st
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --time=04:00:00
-#SBATCH --mem=80G
+#SBATCH --cpus-per-task=4
+#SBATCH --time=12:00:00
+#SBATCH --mem=100G
 #SBATCH --gres=gpu:2
 #SBATCH --partition=gpu-a100
 
 ####### Run your script #########################
 source ~/software/init-conda
 conda activate hist2st-env
-
-# Example configurations - uncomment the one you want to use
 
 # Single GPU training with 3CA gene list
 # python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 16 --epochs 300
@@ -23,7 +21,7 @@ conda activate hist2st-env
 # python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 8 --epochs 5 --strategy ddp
 
 # Multi-GPU training with DDP strategy, small epoch
-python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 4 --num_workers 1 --epochs 5 --precision 16
+python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 1 --epochs 20 --precision 16
 
 # Multi-GPU training with DDP strategy
 # python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 16 --epochs 300

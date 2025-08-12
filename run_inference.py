@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Hist2ST-Fork Inference Script
 This script runs inference/testing for the trained Hist2ST model.
@@ -11,6 +10,7 @@ import os
 import random
 import argparse
 from tqdm import tqdm
+import yaml
 from predict import *
 from HIST2ST import *
 from dataset import ViT_HER2ST, ViT_SKIN
@@ -107,6 +107,39 @@ def create_model(tag, genes, device):
     
     return model, (k, p, d1, d2, d3, h, c)
 
+def create_model(path):
+    """Create and configure the Hist2ST model."""
+    # Unpack model hyperparameters from a yaml file
+    with open(path, 'r') as f:
+        config = yaml.safe_load(f)
+    bake = config['bake']
+    channel = config['channel']
+    depth1 = config['depth1']
+    depth2 = config['depth2']
+    depth3 = config['depth3']
+    dropout = config['dropout']
+    fig_size = config['fig_size']
+    heads = config['heads']
+    kernel_size = config['kernel_size']
+    lamb = config['lamb']
+    n_genes = config['n_genes']
+    n_pos = config['n_pos']
+    nb = config['nb']
+    patch_size = config['patch_size']
+    policy = config['policy']
+    zinb = config['zinb']
+    
+    model = Hist2ST(
+        depth1=depth1, depth2=depth2, depth3=depth3,
+        n_genes=n_genes, learning_rate=config['learning_rate'],
+        kernel_size=kernel_size, patch_size=patch_size,
+        heads=heads, channel=channel, dropout=dropout,
+        zinb=zinb, nb=nb,
+        bake=bake, lamb=lamb,
+        n_pos=n_pos, policy=policy
+    )
+    
+    return model, (kernel_size, patch_size, depth1, depth2, depth3, heads, channel)
 
 def load_model_checkpoint(model, checkpoint_path, device):
     """Load model weights from checkpoint."""
