@@ -6,21 +6,26 @@ Configuration file for THItoGene training
 GENE_LISTS = {
     "3CA": {
         "n_genes": 2977,
+        "prune": "NA",
         "description": "3CA gene set"
     },
     "HER2ST": {
         "n_genes": 785,
+        "prune": "NA",
         "description": "HER2ST gene set"
     },
     "CSCC": {
         "n_genes": 134,
+        "prune": "Grid",
         "description": "CSCC gene set"
     },
     "Hallmark": {
         "n_genes": 4376,
+        "prune": "NA",
         "description": "Hallmark gene set"
     }
 }
+
 
 # Model configurations
 MODEL_CONFIGS = {

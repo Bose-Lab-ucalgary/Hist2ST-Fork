@@ -388,7 +388,7 @@ class ViT_SKIN(torch.utils.data.Dataset):
     
 class ViT_HEST1K(torch.utils.data.Dataset):
     """Some Information about ViT_HEST1K (from AnnData objects)"""
-    def __init__(self, r=4, norm=True, gene_list= "3CA", mode = 'test', flatten=True, ori=False, adj=False, prune='NA', neighs=4):
+    def __init__(self, r=4, norm=True, gene_list= "3CA", mode = 'test', flatten=True, ori=False, adj=True, prune='NA', neighs=4, cancer_only = False):
         """
         adata_dict: dict mapping sample names to AnnData objects
         gene_list: list of genes to use
@@ -425,24 +425,42 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             self.processed_path = self.processed_path / 'train'
         elif mode == 'val':
             self.processed_path = self.processed_path / 'val'
+        elif mode == 'All':
+            self.processed_path = self.processed_path / 'test_all_genes'
         else:
             self.processed_path = self.processed_path / 'test'
-            
-        print(f"Found processed path: {self.processed_path} with {len(list(self.processed_path.glob('*.h5ad')))} samples")
-
-        self.sample_ids = [file.stem.split('_')[0] for file in self.processed_path.glob("*.h5ad")]
-        print(f"Found {len(self.sample_ids)} samples ids.")
-
-        # Load metadata
-        # meta_df = pd.read_csv(os.path.join(self.hest_path, "HEST_v1_1_0.csv"))
-        # meta_df = meta_df[meta_df['species'] == 'Homo sapiens']
         
-         # Filter existing samples
-        # self.sample_ids = [file.name.split('_')[0] for file in self.processed_path.glob("*")]
+        print(f"Looking for HEST1K data in: {self.processed_path}")
         
-        # Store sample data
-        # self.names = self.sample_ids
-        # self.label = {}  # For clustering labels if needed
+        meta_path = os.path.join(self.hest_path, "HEST_v1_1_0.csv")
+        self.metadf = pd.read_csv(meta_path)
+        
+        with open('errored_h5ads.csv', 'r') as f:
+            errored_samples = f.read().splitlines()
+            errored_samples = [s.strip() for s in errored_samples if s.strip()]
+            print(f"Found {len(errored_samples)} errored samples in log file")
+
+        # Get sample IDs from available files
+        if self.processed_path.exists():
+            sample_files = list(self.processed_path.glob("*preprocessed.h5ad"))
+            self.sample_ids = [file.stem.split('_')[0] for file in sample_files if file not in errored_samples]
+            if cancer_only:
+                meta = self.metadf.copy().set_index('id')
+                # self.sample_ids = [s for s in self.sample_ids if meta.loc[s, 'disease_state'] == 'cancer']
+                for s in self.sample_ids.copy():
+                    # print(f"Checking sample {s} for cancer state...")
+                    # print(f"Sample {s} meta: {meta.loc[s]}")
+                    # if meta.loc[s, 'disease_state'].lower() != 'cancer':
+                    #     self.sample_ids.remove(s)
+                    if meta.loc[s, 'organ'].lower() != 'breast':
+                        self.sample_ids.remove(s)
+                
+            print(f"Found {len(self.sample_ids)} samples: {self.sample_ids}")
+        else:
+            print(f"Warning: Path {self.processed_path} does not exist.")
+            raise FileNotFoundError(f"Processed path {self.processed_path} not found.")
+            # self.sample_ids = ['dummy_sample']
+        self.id2name = dict(enumerate(self.sample_ids))
 
     
     def __getitem__(self, idx):
@@ -457,12 +475,12 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
             # Method 1: Make unique by appending _1, _2, etc. to duplicates
             adata.var_names_make_unique()
-    
+
         exps = adata.X
-        ori_counts = exps.copy()  # Keep original for size factors if needed
+        # ori_counts = exps.copy()  # Keep original for size factors if needed
         
         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-        norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
+        # norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
         
         # Get array coordinates
         if 'array_row' in adata.obs and 'array_col' in adata.obs:
@@ -503,9 +521,21 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         else:
             patches = np.random.randn(len(adata), 3, 112, 112)
         
-        # Get adjacency matrix if required
+        # Get adjacency matrix with validation
         if self.adj:
-            adj_matrix = calcADJ(pos, self.neighs, pruneTag=self.prune)
+            try:
+                # Use the scaled positions for adjacency calculation
+                adj_matrix = calcADJ(pos_scaled, self.neighs, pruneTag=self.prune)
+                
+                # Validate adjacency matrix
+                if not validate_adjacency_matrix(adj_matrix, len(adata), sample_id):
+                    print(f"Creating fallback adjacency for {sample_id}")
+                    adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
+                    
+            except Exception as e:
+                print(f"Error creating adjacency matrix for {sample_id}: {e}")
+                print("Creating fallback adjacency matrix")
+                adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
         else:
             adj_matrix = None
         
@@ -529,11 +559,11 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         # Convert all data to tensors
         patches = torch.FloatTensor(patches)
         positions = torch.LongTensor(pos_scaled)
-        expression = torch.FloatTensor(norm_exps)  # Use normalized expression
+        expression = torch.FloatTensor(exps)  # Use normalized expression
         adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
-        centers = torch.FloatTensor(centers)
+        centers = torch.LongTensor(centers)
     
-        if self.mode=='test':
+        if self.mode=='test'or self.mode=='All':
             if self.adj and self.ori:
                 return patches, positions, expression, adj_matrix, ori_data, sf_data, centers, sample_id
             elif self.adj:
@@ -543,6 +573,11 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             else: 
                 return patches, positions, expression, centers, sample_id
 
+        # Convert to tensor with shape validation
+        if adj_matrix is not None:
+            adj_matrix = torch.FloatTensor(adj_matrix)
+            print(f"Final adjacency shape for {sample_id}: {adj_matrix.shape}")
+    
         # Return consistent tensor types
         if self.adj and self.ori:
             return patches, positions, expression, adj_matrix, ori_data, sf_data, centers
@@ -602,10 +637,10 @@ def robust_read_h5ad(path, retries=3, delay=1.0):
 
 def __getitem__(self, idx):
     sample_id = self.sample_ids[idx]
-    adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
-    adata = robust_read_h5ad(adata_path)
     
     print(f"\nProcessing sample {sample_id}")
+    adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
+    adata = robust_read_h5ad(adata_path)
     
     # Make var_names unique before any indexing
     if not adata.var_names.is_unique:
@@ -615,7 +650,7 @@ def __getitem__(self, idx):
 
     exps = adata.X
     ori_counts = exps.copy()  # Keep original for size factors if needed
-
+    
     #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
     norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
 
@@ -658,9 +693,21 @@ def __getitem__(self, idx):
     else:
         patches = np.random.randn(len(adata), 3, 112, 112)
 
-    # Get adjacency matrix if required
+    # Get adjacency matrix with validation
     if self.adj:
-        adj_matrix = calcADJ(pos, self.neighs, pruneTag=self.prune)
+        try:
+            # Use the scaled positions for adjacency calculation
+            adj_matrix = calcADJ(pos_scaled, self.neighs, pruneTag=self.prune)
+            
+            # Validate adjacency matrix
+            if not validate_adjacency_matrix(adj_matrix, len(adata), sample_id):
+                print(f"Creating fallback adjacency for {sample_id}")
+                adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
+                
+        except Exception as e:
+            print(f"Error creating adjacency matrix for {sample_id}: {e}")
+            print("Creating fallback adjacency matrix")
+            adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
     else:
         adj_matrix = None
 
@@ -688,15 +735,20 @@ def __getitem__(self, idx):
     adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
     centers = torch.FloatTensor(centers)
 
+    # Convert to tensor with shape validation
+    if adj_matrix is not None:
+        adj_matrix = torch.FloatTensor(adj_matrix)
+        print(f"Final adjacency shape for {sample_id}: {adj_matrix.shape}")
+    
     # Return consistent tensor types
     if self.adj and self.ori:
-        return patches, positions, expression, adj_matrix, ori_data, sf_data, centers
+        return patches, positions, expression, adj_matrix, ori_data, sf_data, centers, sample_id
     elif self.adj:
-        return patches, positions, expression, adj_matrix, centers
+        return patches, positions, expression, adj_matrix, centers, sample_id
     elif self.ori:
-        return patches, positions, expression, ori_data, sf_data, centers
+        return patches, positions, expression, ori_data, sf_data, centers, sample_id
     else: 
-        return patches, positions, expression, centers
+        return patches, positions, expression, centers, sample_id
 
 
 def __len__(self):
@@ -747,3 +799,39 @@ def custom_collate_fn(batch):
 #     batch_size=batch_size,
 #     collate_fn=custom_collate_fn,  # Add this
 #     # ... other params ...
+# )
+
+def validate_adjacency_matrix(adj, n_spots, sample_id):
+    """Validate adjacency matrix shape and properties"""
+    if adj is None:
+        return False
+    
+    if not isinstance(adj, np.ndarray):
+        adj = np.array(adj)
+    
+    # Check if adjacency matrix is square
+    if len(adj.shape) != 2:
+        print(f"Warning: Adjacency matrix for {sample_id} has wrong dimensions: {adj.shape}")
+        return False
+    
+    if adj.shape[0] != adj.shape[1]:
+        print(f"Warning: Adjacency matrix for {sample_id} is not square: {adj.shape}")
+        return False
+    
+    if adj.shape[0] != n_spots:
+        print(f"Warning: Adjacency matrix size {adj.shape[0]} doesn't match n_spots {n_spots} for {sample_id}")
+        return False
+    
+    return True
+
+def create_fallback_adjacency(n_spots, neighs=6):
+    """Create a simple fallback adjacency matrix"""
+    adj = np.zeros((n_spots, n_spots))
+    
+    # Create simple neighbor connections
+    for i in range(n_spots):
+        for j in range(max(0, i-neighs//2), min(n_spots, i+neighs//2+1)):
+            if i != j:
+                adj[i, j] = 1
+    
+    return adj
