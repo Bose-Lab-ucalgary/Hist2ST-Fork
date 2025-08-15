@@ -5,7 +5,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:2
 #SBATCH --partition=gpu-a100
@@ -15,22 +15,22 @@ source ~/software/init-conda
 conda activate hist2st-env
 
 # Single GPU training with 3CA gene list
-# python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 16 --epochs 300
+# python train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 16 --epochs 300
 
 # Single GPU training with 3CA gene list, small epoch
-# python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 8 --epochs 5 --strategy ddp
+# python train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 8 --epochs 5 --strategy ddp
 
 # Multi-GPU training with DDP strategy, small epoch
-python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 1 --epochs 20 --precision 16
+python train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 1 --epochs 20 --precision 16
 
 # Multi-GPU training with DDP strategy
-# python HEST_train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 16 --epochs 300
+# python train.py --mode train_test --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 16 --epochs 300
 
 # Training only (no testing)
-# python HEST_train.py --mode train --dataset HEST1K --gene_list 3CA --gpus 2 --num_workers 16 --epochs 300
+# python train.py --mode train --dataset HEST1K --gene_list 3CA --gpus 2 --num_workers 16 --epochs 300
 
 # Testing only with specific checkpoint
-# python HEST_train.py --mode test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 8 --checkpoint_path model/specific_model.ckpt
+# python train.py --mode test --dataset HEST1K --gene_list 3CA --gpus 1 --num_workers 8 --checkpoint_path model/specific_model.ckpt
 
 # All phases (train, validate, test)
-# python HEST_train.py --mode all --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 16 --epochs 300
+# python train.py --mode all --dataset HEST1K --gene_list 3CA --gpus 2 --strategy ddp --num_workers 16 --epochs 300

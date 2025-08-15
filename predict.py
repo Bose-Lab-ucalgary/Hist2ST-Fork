@@ -55,40 +55,77 @@ def pk_load(fold,mode='train', flatten=False, dataset='her2st',r=4,ori=True,adj=
 
 
 
-def test(model, test, device='cuda'):
-    """
-    Evaluate a model on test data and return predictions and ground truth as AnnData objects.
-    Args:
-        model: The neural network model to evaluate
-        test: DataLoader containing test data with patches, positions, expressions, adjacency matrices, and centers
-        device (str, optional): Device to run the model on. Defaults to 'cuda'.
-    Returns:
-        tuple: A tuple containing:
-            - adata (AnnData): AnnData object with model predictions and spatial coordinates
-            - adata_gt (AnnData): AnnData object with ground truth expressions and spatial coordinates
-    Note:
-        The function sets the model to evaluation mode and disables gradient computation.
-        Only processes the last batch of the test data due to variable reassignment in the loop.
-    """
-    
-    model=model.to(device)
+def test(model, adata_loader, device):
     model.eval()
-    preds=None
-    ct=None
-    gt=None
-    loss=0
+    
+    pred_list = []
+    gt_list = []
+    coords_list = []
+    sample_ids = []
+    
     with torch.no_grad():
-        for patch, position, exp, adj, *_, center in tqdm(test):
-            patch, position, adj = patch.to(device), position.to(device), adj.to(device).squeeze(0)
-            pred = model(patch, position, adj)[0]
+        for batch in tqdm(adata_loader):
+            # Debug the batch unpacking
+            print(f"Batch length: {len(batch)}")
+            for i, component in enumerate(batch):
+                if hasattr(component, 'shape'):
+                    print(f"  Batch component {i}: {component.shape}")
+            
+            patch, position, exp, adj, *_, centers, sample_id = batch
+            
+            # Move to device
+            patch = patch.to(device)                    
+            positions = position.to(device)   
+            exp = exp.squeeze(0).to(device)             
+            adj = adj.squeeze(0).to(device)             
+            centers = centers.squeeze(0).to(device)                
+            
+            # In your inference function, check which tensor you're passing:
+            print(f"positions range: [{positions.min()}, {positions.max()}]")  # Should be [0, 63]
+            print(f"centers range: [{centers.min()}, {centers.max()}]")        # Might be large pixel coords
+
+            # Make sure you're passing positions, not centers to the model:
+            pred = model(patch, positions, adj)[0]  # Use positions, not centers
+            # Model call
+            # pred = model(patch, centers, adj)[0]
+            
+            # Convert to numpy and append
             preds = pred.squeeze().cpu().numpy()
-            ct = center.squeeze().cpu().numpy()
+            ct = centers.squeeze().cpu().numpy()
             gt = exp.squeeze().cpu().numpy()
-    adata = ad.AnnData(preds)
-    adata.obsm['spatial'] = ct
-    adata_gt = ad.AnnData(gt)
-    adata_gt.obsm['spatial'] = ct
-    return adata,adata_gt
+            
+            # Get number of spots for this sample
+            n_spots = preds.shape[0]
+            
+            # Create sample IDs for each spot
+            if isinstance(sample_id, (list, tuple)):
+                current_sample_id = sample_id[0]
+            elif isinstance(sample_id, str):
+                current_sample_id = sample_id
+            else:
+                current_sample_id = str(sample_id)
+            
+            # Add data to lists
+            pred_list.append(preds)
+            gt_list.append(gt)
+            coords_list.append(ct)
+            sample_ids.extend([current_sample_id] * n_spots)  # Extend, not append!
+    
+    # FIX: CONCATENATE instead of trying to create array from variable-sized arrays
+    all_preds = np.concatenate(pred_list, axis=0)      
+    all_gt = np.concatenate(gt_list, axis=0)           
+    all_coords = np.concatenate(coords_list, axis=0)   
+    
+    # Create AnnData objects with concatenated data
+    adata = ad.AnnData(all_preds)
+    adata.obsm['spatial'] = all_coords
+    adata.obs['sample_id'] = sample_ids
+    
+    adata_gt = ad.AnnData(all_gt)
+    adata_gt.obsm['spatial'] = all_coords
+    adata_gt.obs['sample_id'] = sample_ids
+    
+    return adata, adata_gt
 
 def cluster(adata,label):
     idx=label!='undetermined'

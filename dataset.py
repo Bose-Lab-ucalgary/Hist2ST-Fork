@@ -450,10 +450,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
                 for s in self.sample_ids.copy():
                     # print(f"Checking sample {s} for cancer state...")
                     # print(f"Sample {s} meta: {meta.loc[s]}")
-                    # if meta.loc[s, 'disease_state'].lower() != 'cancer':
-                    #     self.sample_ids.remove(s)
-                    if meta.loc[s, 'organ'].lower() != 'breast':
+                    if meta.loc[s, 'disease_state'].lower() != 'cancer':
                         self.sample_ids.remove(s)
+                    # if meta.loc[s, 'organ'].lower() != 'breast':
+                    #     self.sample_ids.remove(s)
                 
             print(f"Found {len(self.sample_ids)} samples: {self.sample_ids}")
         else:
@@ -477,10 +477,10 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             adata.var_names_make_unique()
 
         exps = adata.X
-        # ori_counts = exps.copy()  # Keep original for size factors if needed
+        # exps = exps.copy()  # Keep original for size factors if needed
         
         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-        # norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
+        # norm_exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
         
         # Get array coordinates
         if 'array_row' in adata.obs and 'array_col' in adata.obs:
@@ -544,16 +544,16 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         sf_data = None
         if self.ori:
             # Calculate size factors
-            if hasattr(ori_counts, "toarray"):
-                ori_counts_dense = ori_counts.toarray()
+            if hasattr(exps, "toarray"):
+                exps_dense = exps.toarray()
             else:
-                ori_counts_dense = ori_counts
+                exps_dense = exps
             
-            n_counts = ori_counts_dense.sum(1)
+            n_counts = exps_dense.sum(1)
             sf = n_counts / np.median(n_counts)
             
             # Convert to tensors immediately
-            ori_data = torch.FloatTensor(ori_counts_dense)
+            ori_data = torch.FloatTensor(exps_dense)
             sf_data = torch.FloatTensor(sf)
     
         # Convert all data to tensors
@@ -649,10 +649,10 @@ def __getitem__(self, idx):
         adata.var_names_make_unique()
 
     exps = adata.X
-    ori_counts = exps.copy()  # Keep original for size factors if needed
+    exps = exps.copy()  # Keep original for size factors if needed
     
     #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-    norm_exps = scp.transform.log(scp.normalize.library_size_normalize(ori_counts))
+    norm_exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
 
     # Get array coordinates
     if 'array_row' in adata.obs and 'array_col' in adata.obs:
@@ -716,16 +716,16 @@ def __getitem__(self, idx):
     sf_data = None
     if self.ori:
         # Calculate size factors
-        if hasattr(ori_counts, "toarray"):
-            ori_counts_dense = ori_counts.toarray()
+        if hasattr(exps, "toarray"):
+            exps_dense = exps.toarray()
         else:
-            ori_counts_dense = ori_counts
+            exps_dense = exps
 
-        n_counts = ori_counts_dense.sum(1)
+        n_counts = exps_dense.sum(1)
         sf = n_counts / np.median(n_counts)
 
         # Convert to tensors immediately
-        ori_data = torch.FloatTensor(ori_counts_dense)
+        ori_data = torch.FloatTensor(exps_dense)
         sf_data = torch.FloatTensor(sf)
 
     # Convert all data to tensors

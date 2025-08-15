@@ -90,6 +90,8 @@ class Hist2ST(pl.LightningModule):
                  dropout=0.2, n_pos=64, kernel_size=5, patch_size=7, n_genes=785, 
                  depth1=2, depth2=8, depth3=4, heads=16, channel=32, 
                  zinb=0, nb=False, bake=0, lamb=0, policy='mean', 
+                # Add dataset parameters
+                 gene_list="HER2ST", prune="NA", neighbors=5, cancer_only=True, dataset_name="HEST1K"
                 ):
         super().__init__()
         self.save_hyperparameters()
@@ -138,6 +140,8 @@ class Hist2ST(pl.LightningModule):
             tf.RandomHorizontalFlip(0.2),
         ])
     def forward(self, patches, centers, adj, aug=False):
+        if not aug:
+            print(f"Forward pass - training mode: {self.training}")
         B,N,C,H,W=patches.shape
         patches=patches.reshape(B*N,C,H,W)
         patches = self.patch_embedding(patches)
@@ -247,6 +251,9 @@ class Hist2ST(pl.LightningModule):
         # Forward pass
         pred, extra, h = self(patch, center, adj.squeeze(0))
         
+        # n_spots = pred.shape[1] if len(pred.shape) > 1 else pred.shape[0]
+        # sample_id_repeated = [sample_id] * n_spots
+        
         # Extract sample info if available in batch
         sample_info = {
             'batch_idx': batch_idx,
@@ -256,3 +263,13 @@ class Hist2ST(pl.LightningModule):
             'sample_id': sample_id
         }
         return sample_info
+    
+    def get_dataset_params(self):
+        """Return dataset parameters for reconstruction"""
+        return {
+            'gene_list': self.hparams.gene_list,
+            'prune': self.hparams.prune,
+            'neighbors': self.hparams.neighbors,
+            'cancer_only': self.hparams.cancer_only,
+            'dataset_name': self.hparams.dataset_name
+        }

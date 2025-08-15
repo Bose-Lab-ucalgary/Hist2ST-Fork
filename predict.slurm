@@ -8,7 +8,7 @@
 #SBATCH --time=1:00:00
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:1
-#SBATCH --partition=gpu-a100
+#SBATCH --partition=gpu-v100
 
 ####### Run your script #########################
 source ~/software/init-conda

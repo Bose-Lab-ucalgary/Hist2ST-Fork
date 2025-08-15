@@ -20,7 +20,6 @@ from dataset import ViT_HEST1K
 from config import GENE_LISTS
 from HIST2ST import Hist2ST
 from predict import test
-# from utils import get_R
 
 def create_hist2st_model(tag="5-7-2-8-4-16-32", gene_list="HER2ST"):
     """Create and configure the Hist2ST model from tag string."""
@@ -39,50 +38,6 @@ def create_hist2st_model(tag="5-7-2-8-4-16-32", gene_list="HER2ST"):
     )
     
     return model, n_genes
-
-def calculate_sample_correlations_and_pvalues(all_preds, all_gt, sample_ids):
-    """Calculate per-sample Pearson correlations and p-values"""
-    
-    # Determine sample boundaries
-    sample_correlations = []
-    sample_pvalues = []
-    processed_samples = []
-    
-    # Group predictions by sample
-    unique_samples = list(dict.fromkeys(sample_ids))  # Preserve order, remove duplicates
-    
-    start_idx = 0
-    for sample_id in unique_samples:
-        # Count occurrences of this sample
-        sample_count = sample_ids.count(sample_id)
-        end_idx = start_idx + sample_count
-        
-        # Extract predictions and ground truth for this sample
-        sample_preds = all_preds[start_idx:end_idx]
-        sample_gt = all_gt[start_idx:end_idx]
-        
-        # Calculate correlation and p-value for this sample
-        if sample_preds.shape[0] > 1:  # Need at least 2 points for correlation
-            # Flatten the arrays for correlation calculation
-            pred_flat = sample_preds.flatten()
-            gt_flat = sample_gt.flatten()
-            
-            # Remove NaN values
-            valid_mask = ~(np.isnan(pred_flat) | np.isnan(gt_flat))
-            if np.sum(valid_mask) > 1:
-                corr, p_val = stats.pearsonr(pred_flat[valid_mask], gt_flat[valid_mask])
-            else:
-                corr, p_val = np.nan, np.nan
-        else:
-            corr, p_val = np.nan, np.nan
-        
-        sample_correlations.append(corr)
-        sample_pvalues.append(p_val)
-        processed_samples.append(sample_id)
-        
-        start_idx = end_idx
-    
-    return processed_samples, sample_correlations, sample_pvalues
 
 def test_model(checkpoint_path="./model/5-Hist2ST.ckpt", 
                tag="5-7-2-8-4-16-32", 
@@ -200,13 +155,157 @@ def test_model(checkpoint_path="./model/5-Hist2ST.ckpt",
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+def test_model_chunked(checkpoint_path="./model/5-Hist2ST.ckpt", 
+                      tag="5-7-2-8-4-16-32", 
+                      gene_list="HER2ST",
+                      device="cuda",
+                      max_spots_per_chunk=5000):  # Add chunk size limit
+    
+    print("Testing Hist2ST model validation (chunked)...")
+    
+    # Set device
+    if device == 'cuda' and not torch.cuda.is_available():
+        print("CUDA not available, using CPU")
+        device = 'cpu'
+    
+    # Clear GPU memory
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+  
+    try:
+        # Create model
+        print(f"Creating Hist2ST model with tag: {tag}")
+        model, n_genes = create_hist2st_model(tag=tag, gene_list=gene_list)
+        print(f"✓ Model created with {n_genes} genes")
+        
+        # Load model weights
+        if not os.path.exists(checkpoint_path):
+            raise FileNotFoundError(f"Model checkpoint not found: {checkpoint_path}")
+        
+        print(f"Loading model weights from: {checkpoint_path}")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        model.to(device)
+        model.eval()
+        print("✓ Model loaded and moved to device")
+        
+        # Create dataset
+        print("Creating dataset...")
+        dataset = ViT_HEST1K(mode='All', gene_list=gene_list, cancer_only=True)
+        data_loader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False)
+        print(f"✓ Dataset created with {len(dataset)} samples")
+        
+        # Check if dataset is empty
+        if len(dataset) == 0:
+            print("ERROR: Dataset is empty!")
+            return
+        
+        # Process samples one by one
+        all_predictions = []
+        all_ground_truth = []
+        all_sample_ids = []
+        
+        print(f"Processing {len(dataset)} samples individually...")
+        
+        for i in tqdm(range(len(dataset))):
+            try:
+                # Clear GPU memory before each sample
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Create single-sample loader
+                single_sample_dataset = torch.utils.data.Subset(dataset, [i])
+                single_loader = DataLoader(single_sample_dataset, batch_size=1, num_workers=0)
+                
+                # Get sample info
+                sample_data = dataset[i]
+                n_spots = sample_data[0].shape[0] if hasattr(sample_data[0], 'shape') else len(sample_data[0])
+                sample_id = dataset.sample_ids[i] if hasattr(dataset, 'sample_ids') else f"sample_{i}"
+                
+                print(f"Processing sample {sample_id} with {n_spots} spots...")
+                
+                # Skip if too large
+                if n_spots > max_spots_per_chunk:
+                    print(f"⚠ Skipping sample {sample_id} - too large ({n_spots} > {max_spots_per_chunk})")
+                    continue
+                
+                # Run prediction for this sample
+                with torch.no_grad():
+                    sample_pred, sample_gt = test(model, single_loader, device)
+                    
+                    # Extract data
+                    if hasattr(sample_pred, 'X'):
+                        pred_data = sample_pred.X if not hasattr(sample_pred.X, 'toarray') else sample_pred.X.toarray()
+                        gt_data = sample_gt.X if not hasattr(sample_gt.X, 'toarray') else sample_gt.X.toarray()
+                    else:
+                        pred_data = np.array(sample_pred)
+                        gt_data = np.array(sample_gt)
+                    
+                    all_predictions.append(pred_data)
+                    all_ground_truth.append(gt_data)
+                    
+                    # Add sample IDs for each spot
+                    if hasattr(sample_pred, 'obs') and 'sample_id' in sample_pred.obs:
+                        sample_ids_list = sample_pred.obs['sample_id'].tolist()
+                    else:
+                        sample_ids_list = [sample_id] * pred_data.shape[0]
+                    
+                    all_sample_ids.extend(sample_ids_list)
+                    
+                    print(f"✓ Completed sample {sample_id}: {pred_data.shape}")
+                
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    print(f"⚠ Skipping sample {sample_id} - out of memory")
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    continue
+                else:
+                    raise e
+        
+        # Concatenate all results
+        if all_predictions:
+            final_predictions = np.vstack(all_predictions)
+            final_ground_truth = np.vstack(all_ground_truth)
+            
+            print(f"✓ Processed {len(all_predictions)} samples successfully")
+            print(f"Final shapes: predictions {final_predictions.shape}, ground truth {final_ground_truth.shape}")
+            
+            # Save results
+            output_data = {
+                'predictions': final_predictions,
+                'ground_truth': final_ground_truth,
+                'sample_ids': all_sample_ids
+            }
+            
+            output_dir = "./results"
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, f"{gene_list}_pred_gt.npz")
+            np.savez(output_path, **output_data)
+            print(f"✓ Results saved to {output_path}")
+            
+            return final_predictions, final_ground_truth, all_sample_ids
+        else:
+            print("❌ No samples were processed successfully")
+            return None, None, None
+        
+    except Exception as e:
+        print(f"Error during inference: {e}")
+        raise
+        
+    finally:
+        # Cleanup
+        if 'model' in locals():
+            del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
 
 if __name__ == "__main__":
     # Test with different model configurations
     print("Starting Hist2ST inference test...")
     
     # Configuration options
-    checkpoint_path = "./model/5-Hist2ST.ckpt"  # Update to your actual checkpoint
+    checkpoint_path = "./model/5-Hist2ST.ckpt"
     tag = "5-7-2-8-4-16-32"  # Model architecture tag
     gene_list = "HER2ST"  # Gene list to use
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -218,11 +317,19 @@ if __name__ == "__main__":
     print(f"- Device: {device}")
     print("-" * 50)
     
-    test_model(
+    # test_model(
+    #     checkpoint_path=checkpoint_path,
+    #     tag=tag,
+    #     gene_list=gene_list,
+    #     device=device
+    # )
+    
+    test_model_chunked(
         checkpoint_path=checkpoint_path,
         tag=tag,
         gene_list=gene_list,
-        device=device
+        device=device,
+        max_spots_per_chunk=8000  # Adjust based on your GPU memory
     )
     print("Hist2ST inference test completed successfully.")
 

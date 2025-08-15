@@ -3,6 +3,8 @@
 *.zip
 *.tsv
 *.yaml
+*metrics.csv
+*.out
 events.out.tfevents.*
 .vscode/launch.json
 Summer/data_explore.ipynb
@@ -183,3 +185,4 @@ Summer/he_models/DeepPT/__MACOSX/13DeepPT_train/._utils.py
 Summer/src/hn_summer/__init__.py
 lightning_logs/version_0/events.out.tfevents.1753407760.fg8.1008903.0
 Jamie.code-workspace
+logs/my_test_log_hist2st_hest1k_5-7-1-4-2-8-16_2025-08-05/version_4/metrics.csv
