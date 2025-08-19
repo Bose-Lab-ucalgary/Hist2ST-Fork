@@ -9,6 +9,11 @@ GENE_LISTS = {
         "prune": "NA",
         "description": "3CA gene set"
     },
+    "3CA-copy": {
+        "n_genes": 2977,
+        "prune": "NA",
+        "description": "3CA gene set"
+    },
     "HER2ST": {
         "n_genes": 785,
         "prune": "NA",

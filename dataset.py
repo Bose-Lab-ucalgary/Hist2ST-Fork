@@ -6,6 +6,7 @@ import torch
 import torchvision
 import numpy as np
 import scanpy as sc
+import time
 import pandas as pd 
 import scprep as scp
 import anndata as ad
@@ -387,6 +388,45 @@ class ViT_SKIN(torch.utils.data.Dataset):
         
     
 class ViT_HEST1K(torch.utils.data.Dataset):
+    """
+    PyTorch Dataset class for loading and preprocessing spatial transcriptomics data from the HEST1K dataset.
+    This dataset class handles loading of spatial transcriptomics data including gene expression,
+    spatial coordinates, histology patches, and adjacency matrices for spatial analysis.
+    Args:
+        r (int, optional): Scaling factor parameter. Defaults to 4.
+        norm (bool, optional): Whether to normalize the data. Defaults to True.
+        gene_list (str, optional): Gene list to use. Options include "3CA", "HER2ST", "cSCC", 
+            "Hallmark". Defaults to "3CA".
+        mode (str, optional): Dataset split mode. Options: 'train', 'val', 'test', 'All'. 
+            Defaults to 'test'.
+        flatten (bool, optional): Whether to flatten the data. Defaults to True.
+        ori (bool, optional): Whether to include original expression data and size factors. 
+            Defaults to False.
+        adj (bool, optional): Whether to compute adjacency matrices for spatial relationships. 
+            Defaults to True.
+        prune (str, optional): Pruning strategy for adjacency matrix. Defaults to 'NA'.
+        neighs (int, optional): Number of neighbors for adjacency computation. Defaults to 4.
+        cancer_only (bool, optional): Whether to filter for cancer samples only. Defaults to False.
+    Returns:
+        tuple: Depending on configuration, returns:
+            - patches (torch.FloatTensor): Histology image patches (N, 3, 112, 112)
+            - positions (torch.LongTensor): Spatial array coordinates (N, 2)
+            - expression (torch.FloatTensor): Gene expression matrix (N, genes)
+            - adj_matrix (torch.FloatTensor, optional): Spatial adjacency matrix (N, N)
+            - ori_data (torch.FloatTensor, optional): Original expression data
+            - sf_data (torch.FloatTensor, optional): Size factors for normalization
+            - centers (torch.LongTensor): Pixel coordinates for spots
+            - sample_id (str, optional): Sample identifier (only in test/All modes)
+    Raises:
+        FileNotFoundError: If the processed data path does not exist.
+        ValueError: If spatial coordinates are missing from the data.
+        OSError: If patch files cannot be read after multiple attempts.
+    Note:
+        The dataset expects preprocessed AnnData objects with spatial coordinates and 
+        corresponding histology patches stored in HDF5 format. Positions are normalized
+        to [0, 63] range for compatibility with Hist2ST models.
+    """
+    
     """Some Information about ViT_HEST1K (from AnnData objects)"""
     def __init__(self, r=4, norm=True, gene_list= "3CA", mode = 'test', flatten=True, ori=False, adj=True, prune='NA', neighs=4, cancer_only = False):
         """
@@ -446,14 +486,11 @@ class ViT_HEST1K(torch.utils.data.Dataset):
             self.sample_ids = [file.stem.split('_')[0] for file in sample_files if file not in errored_samples]
             if cancer_only:
                 meta = self.metadf.copy().set_index('id')
-                # self.sample_ids = [s for s in self.sample_ids if meta.loc[s, 'disease_state'] == 'cancer']
                 for s in self.sample_ids.copy():
                     # print(f"Checking sample {s} for cancer state...")
                     # print(f"Sample {s} meta: {meta.loc[s]}")
                     if meta.loc[s, 'disease_state'].lower() != 'cancer':
                         self.sample_ids.remove(s)
-                    # if meta.loc[s, 'organ'].lower() != 'breast':
-                    #     self.sample_ids.remove(s)
                 
             print(f"Found {len(self.sample_ids)} samples: {self.sample_ids}")
         else:
@@ -468,8 +505,8 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         
         print(f"\nProcessing sample {sample_id}")
         adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
-        adata = robust_read_h5ad(adata_path)
-        
+        adata = ad.read_h5ad(adata_path)
+
         # Make var_names unique before any indexing
         if not adata.var_names.is_unique:
             print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
@@ -593,6 +630,40 @@ class ViT_HEST1K(torch.utils.data.Dataset):
         return len(self.sample_ids)
 
     def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
+        """
+        Load image patches from an HDF5 file for specified spots.
+        This method reads image data and barcodes from an HDF5 file, matches the requested
+        spot names with available barcodes, and returns the corresponding image patches.
+        Images are preprocessed to ensure consistent format (CxHxW with 3 channels).
+        Parameters:
+        -----------
+        sample_id : str
+            Identifier for the sample, used to construct the HDF5 file path
+        spot_names : list of str
+            List of spot identifiers to retrieve patches for
+        retries : int, optional
+            Number of retry attempts if file reading fails (default: 3)
+        delay : float, optional
+            Delay in seconds between retry attempts (default: 1.0)
+        Returns:
+        --------
+        numpy.ndarray
+            Array of image patches with shape (n_spots, 3, 112, 112) where:
+            - n_spots is the length of spot_names
+            - 3 represents RGB channels
+            - 112x112 is the patch dimensions
+            Missing spots are filled with zero arrays
+        Raises:
+        -------
+        OSError
+            If the HDF5 file cannot be read after all retry attempts
+        Notes:
+        ------
+        - Grayscale images are converted to RGB by duplicating the single channel
+        - Images are transposed from HxWxC to CxHxW format
+        - Spots not found in the HDF5 file are represented as zero-filled arrays
+        """
+        
         path = os.path.join(self.patch_path, f"{sample_id}.h5")
         for attempt in range(retries):
             try:
@@ -624,182 +695,181 @@ class ViT_HEST1K(torch.utils.data.Dataset):
                 time.sleep(delay)
         raise OSError(f"Failed to read {path} after {retries} attempts.")
 
-import time
 
-def robust_read_h5ad(path, retries=3, delay=1.0):
-    for attempt in range(retries):
-        try:
-            return ad.read_h5ad(path)
-        except OSError as e:
-            print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
-            time.sleep(delay)
-    raise OSError(f"Failed to read {path} after {retries} attempts.")
+#     def robust_read_h5ad(path, retries=3, delay=1.0):
+#         for attempt in range(retries):
+#             try:
+#                 return ad.read_h5ad(path)
+#             except OSError as e:
+#                 print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
+#                 time.sleep(delay)
+#         raise OSError(f"Failed to read {path} after {retries} attempts.")
 
-def __getitem__(self, idx):
-    sample_id = self.sample_ids[idx]
-    
-    print(f"\nProcessing sample {sample_id}")
-    adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
-    adata = robust_read_h5ad(adata_path)
-    
-    # Make var_names unique before any indexing
-    if not adata.var_names.is_unique:
-        print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
-        # Method 1: Make unique by appending _1, _2, etc. to duplicates
-        adata.var_names_make_unique()
+#     def __getitem__(self, idx):
+#         sample_id = self.sample_ids[idx]
+        
+#         print(f"\nProcessing sample {sample_id}")
+#         adata_path = os.path.join(self.processed_path, f"{sample_id}_preprocessed.h5ad")
+#         adata = robust_read_h5ad(adata_path)
+        
+#         # Make var_names unique before any indexing
+#         if not adata.var_names.is_unique:
+#             print(f"Found {sum(adata.var_names.duplicated())} duplicate gene names, making them unique")
+#             # Method 1: Make unique by appending _1, _2, etc. to duplicates
+#             adata.var_names_make_unique()
 
-    exps = adata.X
-    exps = exps.copy()  # Keep original for size factors if needed
-    
-    #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
-    norm_exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
+#         exps = adata.X
+#         exps = exps.copy()  # Keep original for size factors if needed
+        
+#         #TODO: they normalized and log-transformed the data in the HER2ST dataset, should we do that here?
+#         norm_exps = scp.transform.log(scp.normalize.library_size_normalize(exps))
 
-    # Get array coordinates
-    if 'array_row' in adata.obs and 'array_col' in adata.obs:
-        pos = adata.obs[['array_row', 'array_col']].values.astype(int)
-    elif 'spatial' in adata.obsm:
-        pos = adata.obsm['spatial'].copy()
-    else:
-        print(f"Error: Sample {sample_id} does not have spatial coordinates.")
-        pos = np.zeros((adata.n_obs, 2), dtype=int)  
-        for i in range(adata.n_obs):
-            pos[i] = [i // 64, i % 64]  
+#         # Get array coordinates
+#         if 'array_row' in adata.obs and 'array_col' in adata.obs:
+#             pos = adata.obs[['array_row', 'array_col']].values.astype(int)
+#         elif 'spatial' in adata.obsm:
+#             pos = adata.obsm['spatial'].copy()
+#         else:
+#             print(f"Error: Sample {sample_id} does not have spatial coordinates.")
+#             pos = np.zeros((adata.n_obs, 2), dtype=int)  
+#             for i in range(adata.n_obs):
+#                 pos[i] = [i // 64, i % 64]  
 
-    pos_min = pos.min(axis=0)
-    pos_max = pos.max(axis=0)
+#         pos_min = pos.min(axis=0)
+#         pos_max = pos.max(axis=0)
 
-    # Unique to HIS2ST - expects positions in [0, 63] range ?
-    # Normalize positions to [0, 1] range
-    pos_normalized = (pos - pos_min) / (pos_max - pos_min + 1e-8)
-    # Scale to [0, 63]
-    pos_scaled = (pos_normalized * 63).astype(int)
-    # Ensure positions are within bounds
-    pos_scaled = np.clip(pos_scaled, 0, 63)
+#         # Unique to HIS2ST - expects positions in [0, 63] range ?
+#         # Normalize positions to [0, 1] range
+#         pos_normalized = (pos - pos_min) / (pos_max - pos_min + 1e-8)
+#         # Scale to [0, 63]
+#         pos_scaled = (pos_normalized * 63).astype(int)
+#         # Ensure positions are within bounds
+#         pos_scaled = np.clip(pos_scaled, 0, 63)
 
-    # Get pixel coordinates
-    if 'spatial' in adata.obsm:
-        centers = adata.obsm['spatial']
-    elif 'spatial' in adata.uns:
-        centers = adata.uns['spatial']
-        print(f"Error: Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
-        print(adata)
-        raise ValueError(f"Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
-    centers = adata.obsm['spatial']
+#         # Get pixel coordinates
+#         if 'spatial' in adata.obsm:
+#             centers = adata.obsm['spatial']
+#         elif 'spatial' in adata.uns:
+#             centers = adata.uns['spatial']
+#             print(f"Error: Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
+#             print(adata)
+#             raise ValueError(f"Sample {sample_id} does not have spatial coordinates in obsm['spatial'].")
+#         centers = adata.obsm['spatial']
 
-    # Load Patches
-    patch_path = os.path.join(self.patch_path, f"{sample_id}.h5")
-    if os.path.exists(patch_path):
-        patches = self._load_patches(sample_id, adata.obs_names)
-    else:
-        patches = np.random.randn(len(adata), 3, 112, 112)
+#         # Load Patches
+#         patch_path = os.path.join(self.patch_path, f"{sample_id}.h5")
+#         if os.path.exists(patch_path):
+#             patches = self._load_patches(sample_id, adata.obs_names)
+#         else:
+#             patches = np.random.randn(len(adata), 3, 112, 112)
 
-    # Get adjacency matrix with validation
-    if self.adj:
-        try:
-            # Use the scaled positions for adjacency calculation
-            adj_matrix = calcADJ(pos_scaled, self.neighs, pruneTag=self.prune)
-            
-            # Validate adjacency matrix
-            if not validate_adjacency_matrix(adj_matrix, len(adata), sample_id):
-                print(f"Creating fallback adjacency for {sample_id}")
-                adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
+#         # Get adjacency matrix with validation
+#         if self.adj:
+#             try:
+#                 # Use the scaled positions for adjacency calculation
+#                 adj_matrix = calcADJ(pos_scaled, self.neighs, pruneTag=self.prune)
                 
-        except Exception as e:
-            print(f"Error creating adjacency matrix for {sample_id}: {e}")
-            print("Creating fallback adjacency matrix")
-            adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
-    else:
-        adj_matrix = None
+#                 # Validate adjacency matrix
+#                 if not validate_adjacency_matrix(adj_matrix, len(adata), sample_id):
+#                     print(f"Creating fallback adjacency for {sample_id}")
+#                     adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
+                    
+#             except Exception as e:
+#                 print(f"Error creating adjacency matrix for {sample_id}: {e}")
+#                 print("Creating fallback adjacency matrix")
+#                 adj_matrix = create_fallback_adjacency(len(adata), self.neighs)
+#         else:
+#             adj_matrix = None
 
-    # Prepare ori and sf data if requested
-    ori_data = None
-    sf_data = None
-    if self.ori:
-        # Calculate size factors
-        if hasattr(exps, "toarray"):
-            exps_dense = exps.toarray()
-        else:
-            exps_dense = exps
+#         # Prepare ori and sf data if requested
+#         ori_data = None
+#         sf_data = None
+#         if self.ori:
+#             # Calculate size factors
+#             if hasattr(exps, "toarray"):
+#                 exps_dense = exps.toarray()
+#             else:
+#                 exps_dense = exps
 
-        n_counts = exps_dense.sum(1)
-        sf = n_counts / np.median(n_counts)
+#             n_counts = exps_dense.sum(1)
+#             sf = n_counts / np.median(n_counts)
 
-        # Convert to tensors immediately
-        ori_data = torch.FloatTensor(exps_dense)
-        sf_data = torch.FloatTensor(sf)
+#             # Convert to tensors immediately
+#             ori_data = torch.FloatTensor(exps_dense)
+#             sf_data = torch.FloatTensor(sf)
 
-    # Convert all data to tensors
-    patches = torch.FloatTensor(patches)
-    positions = torch.LongTensor(pos_scaled)
-    expression = torch.FloatTensor(norm_exps)  # Use normalized expression
-    adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
-    centers = torch.FloatTensor(centers)
+#         # Convert all data to tensors
+#         patches = torch.FloatTensor(patches)
+#         positions = torch.LongTensor(pos_scaled)
+#         expression = torch.FloatTensor(norm_exps)  # Use normalized expression
+#         adj_matrix = torch.FloatTensor(adj_matrix) if adj_matrix is not None else None
+#         centers = torch.FloatTensor(centers)
 
-    # Convert to tensor with shape validation
-    if adj_matrix is not None:
-        adj_matrix = torch.FloatTensor(adj_matrix)
-        print(f"Final adjacency shape for {sample_id}: {adj_matrix.shape}")
-    
-    # Return consistent tensor types
-    if self.adj and self.ori:
-        return patches, positions, expression, adj_matrix, ori_data, sf_data, centers, sample_id
-    elif self.adj:
-        return patches, positions, expression, adj_matrix, centers, sample_id
-    elif self.ori:
-        return patches, positions, expression, ori_data, sf_data, centers, sample_id
-    else: 
-        return patches, positions, expression, centers, sample_id
+#         # Convert to tensor with shape validation
+#         if adj_matrix is not None:
+#             adj_matrix = torch.FloatTensor(adj_matrix)
+#             print(f"Final adjacency shape for {sample_id}: {adj_matrix.shape}")
+        
+#         # Return consistent tensor types
+#         if self.adj and self.ori:
+#             return patches, positions, expression, adj_matrix, ori_data, sf_data, centers, sample_id
+#         elif self.adj:
+#             return patches, positions, expression, adj_matrix, centers, sample_id
+#         elif self.ori:
+#             return patches, positions, expression, ori_data, sf_data, centers, sample_id
+#         else: 
+#             return patches, positions, expression, centers, sample_id
 
 
-def __len__(self):
-    return len(self.sample_ids)
+#     def __len__(self):
+#         return len(self.sample_ids)
 
-def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
-    path = os.path.join(self.patch_path, f"{sample_id}.h5")
-    for attempt in range(retries):
-        try:
-            with h5py.File(path, 'r') as f:
-                patches = []
-                images = f['img'][:]
-                barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
-                
-                barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
-                
-                for spot in spot_names:
-                    if spot in barcode_to_idx:
-                        idx = barcode_to_idx[spot]
-                        img = images[idx]
-                        # patches.append(images[idx])
+#     def _load_patches(self, sample_id, spot_names, retries=3, delay=1.0):
+#         path = os.path.join(self.patch_path, f"{sample_id}.h5")
+#         for attempt in range(retries):
+#             try:
+#                 with h5py.File(path, 'r') as f:
+#                     patches = []
+#                     images = f['img'][:]
+#                     barcodes = [bc[0].decode('utf-8') if isinstance(bc[0], bytes) else bc[0] for bc in f['barcode'][:]]
+                    
+#                     barcode_to_idx = {bc: i for i, bc in enumerate(barcodes)}
+                    
+#                     for spot in spot_names:
+#                         if spot in barcode_to_idx:
+#                             idx = barcode_to_idx[spot]
+#                             img = images[idx]
+#                             # patches.append(images[idx])
 
-                        # Why convert to tensor and normalize??
-                        if len(img.shape) == 2:
-                            img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
-                        else:
-                            img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
-                        patches.append(img)
-                    else:
-                        patches.append(np.zeros((3, 112, 112)))
-                
-                return np.array(patches)
-        except OSError as e:
-            print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
-            time.sleep(delay)
-    raise OSError(f"Failed to read {path} after {retries} attempts.")
+#                             # Why convert to tensor and normalize??
+#                             if len(img.shape) == 2:
+#                                 img = np.stack([img, img, img], axis =0) # Convert grayscale to RGB
+#                             else:
+#                                 img = img.transpose(2, 0, 1) # Convert HxWxC to CxHxW
+#                             patches.append(img)
+#                         else:
+#                             patches.append(np.zeros((3, 112, 112)))
+                    
+#                     return np.array(patches)
+#             except OSError as e:
+#                 print(f"Error reading {path}: {e} (attempt {attempt+1}/{retries})")
+#                 time.sleep(delay)
+#         raise OSError(f"Failed to read {path} after {retries} attempts.")
 
-# Add to your dataset or dataloader
+# # Add to your dataset or dataloader
 def custom_collate_fn(batch):
     """Custom collate function to handle variable sample sizes"""
     # Sort batch by sample complexity/size
     batch = sorted(batch, key=lambda x: x[0].numel())  # Sort by patch size
     return default_collate(batch)
 
-# # In your train function:
-# train_loader = DataLoader(
-#     trainset, 
-#     batch_size=batch_size,
-#     collate_fn=custom_collate_fn,  # Add this
-#     # ... other params ...
-# )
+# # # In your train function:
+# # train_loader = DataLoader(
+# #     trainset, 
+# #     batch_size=batch_size,
+# #     collate_fn=custom_collate_fn,  # Add this
+# #     # ... other params ...
+# # )
 
 def validate_adjacency_matrix(adj, n_spots, sample_id):
     """Validate adjacency matrix shape and properties"""

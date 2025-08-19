@@ -1,3 +1,21 @@
+"""
+Callbacks for PyTorch Lightning training to track time, monitor GPU memory, and handle out-of-memory errors.
+This module provides several callback classes to enhance training monitoring and debugging:
+Classes:
+    TimeTrackingCallback: Tracks training time and calculates statistics per epoch
+    GPUMemoryMonitorCallback: Monitors GPU memory usage throughout training
+    ClearCacheCallback: Clears GPU cache at strategic points to prevent memory buildup
+    OOMHandlerCallback: Handles out-of-memory errors and attempts recovery
+Example:
+    >>> from callbacks import TimeTrackingCallback, GPUMemoryMonitorCallback
+    >>> trainer = pl.Trainer(
+    ...     callbacks=[
+    ...         TimeTrackingCallback(),
+    ...         GPUMemoryMonitorCallback(log_every_n_batches=50)
+    ...     ]
+    ... )
+"""
+
 import gc
 import time
 from pytorch_lightning.callbacks import Callback

@@ -18,8 +18,7 @@ Key Features:
 Usage:
     python HEST_train.py --mode train_test --dataset HEST1K --gene_list HER2ST --epochs 350
 
-Author: GitHub Copilot
-Date: Generated for HEST training pipeline
+
 """
 
 import gc
@@ -35,7 +34,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import DataLoader
 from datetime import date
 from config import GENE_LISTS
-from custom_trainer import custom_eval_loop, custom_train_loop
+# from custom_trainer import custom_eval_loop, custom_train_loop
 from predict import test as predict
 from callbacks import TimeTrackingCallback, GPUMemoryMonitorCallback, ClearCacheCallback, OOMHandlerCallback
 
@@ -92,8 +91,8 @@ def parse_args():
                             help='Directory to save checkpoints')
     parser.add_argument('--patience', type=int, default=25, help='Early stopping patience')
     parser.add_argument('--prune', type=str, default='NA', help='Pruning method (default: NA)')
-    
-    # Add these checkpoint management arguments:
+
+    # Checkpoint management
     parser.add_argument('--auto_resume', action='store_true', default=True,
                         help='Automatically resume from last checkpoint if found (default: True)')
     parser.add_argument('--force_restart', action='store_true', default=False,
@@ -116,6 +115,29 @@ def parse_args():
     return parser.parse_args()
 
 def get_checkpoint_info(modelsave_address, args):
+    """
+    Check for existing checkpoints and determine what to load.
+    This function searches for checkpoints in the following priority order:
+    1. Explicit checkpoint path specified in args.checkpoint_path
+    2. Automatic checkpoint (last.ckpt) in the model save directory
+    3. Any .ckpt files in the model save directory (returns the most recently created)
+    Args:
+        modelsave_address (str): Directory path where model checkpoints are saved
+        args: Arguments object containing checkpoint_path attribute for explicit checkpoint specification
+    Returns:
+        tuple: A tuple containing:
+            - checkpoint_path (str or None): Path to the checkpoint file if found, None otherwise
+            - checkpoint_type (str): Type of checkpoint found, one of:
+                - "explicit": User-specified checkpoint path
+                - "auto": Automatic last.ckpt checkpoint
+                - "found": Latest .ckpt file in directory
+                - "none": No checkpoints found
+    Example:
+        >>> checkpoint_path, checkpoint_type = get_checkpoint_info("/path/to/models", args)
+        >>> if checkpoint_path:
+        ...     print(f"Loading {checkpoint_type} checkpoint: {checkpoint_path}")
+    """
+    
     """Check for existing checkpoints and determine what to load"""
     # Explicit checkpoint path?
     if args.checkpoint_path and os.path.exists(args.checkpoint_path):
@@ -141,6 +163,31 @@ def get_checkpoint_info(modelsave_address, args):
     return None, "none"
 
 def should_resume_training(checkpoint_path, checkpoint_type, args):
+    """
+    Determine if training should resume from a checkpoint or start fresh.
+    Args:
+        checkpoint_path (str or None): Path to the checkpoint file to potentially resume from
+        checkpoint_type (str): Type of checkpoint detection:
+            - "none": No checkpoint found or specified
+            - "explicit": Checkpoint explicitly provided by user
+            - "auto": Automatically detected checkpoint from previous run
+            - "found": Checkpoint found but requires user decision
+        args (argparse.Namespace): Command line arguments containing:
+            - force_restart (bool): If True, ignore existing checkpoints and start fresh
+            - auto_resume (bool): If True, automatically resume from checkpoint
+    Returns:
+        tuple: (checkpoint_path, start_epoch)
+            - checkpoint_path (str or None): Path to checkpoint to resume from, or None to start fresh
+            - start_epoch (None): Always returns None for start epoch (handled elsewhere)
+    Behavior:
+        - "none" type: Always starts fresh training
+        - "explicit" type: Always uses the provided checkpoint
+        - Any type with force_restart=True: Starts fresh regardless of checkpoint
+        - Any type with auto_resume=True: Resumes from checkpoint
+        - "auto" type (default): Automatically resumes from checkpoint
+        - "found" type (default): Starts fresh unless auto_resume is enabled
+    """
+    
     """Determine if training should resume or start fresh"""
     if checkpoint_type == "none":
         print("Starting fresh training...")
@@ -177,6 +224,29 @@ def should_resume_training(checkpoint_path, checkpoint_type, args):
         return None, None
 
 def load_model_from_checkpoint(checkpoint_path, args):
+    """
+    Load a HisToGene model from a checkpoint file and extract dataset parameters.
+    This function attempts to load a pre-trained model from a checkpoint and retrieve
+    the dataset parameters that were used during training. It tries multiple methods
+    to extract these parameters, falling back gracefully if they're not available.
+    Args:
+        checkpoint_path (str): Path to the model checkpoint file to load
+        args: Command line arguments object containing fallback dataset parameters
+              including gene_list, prune, neighbors, cancer_only, and dataset
+    Returns:
+        tuple: A tuple containing:
+            - model (HisToGene or None): The loaded model instance, or None if loading failed
+            - dataset_params (dict or None): Dictionary containing dataset parameters with keys:
+                'gene_list', 'prune', 'neighbors', 'cancer_only', 'dataset_name'.
+                Returns None if no parameters could be extracted from the checkpoint.
+    Notes:
+        - First attempts to use model's get_dataset_params() method if available
+        - Falls back to extracting parameters from model.hparams if present
+        - Uses command line args as fallback values when checkpoint params are missing
+        - Prints status messages during the loading process
+        - Returns (None, None) if checkpoint loading fails
+    """
+    
     """Load model and extract dataset parameters"""
     try:
         print(f"Loading model from checkpoint: {checkpoint_path}")
@@ -207,6 +277,44 @@ def load_model_from_checkpoint(checkpoint_path, args):
         return None, None
     
 def train(args, vit_dataset=ViT_HEST1K):
+    """
+    Train a Hist2ST model on spatial transcriptomics data with comprehensive checkpoint management.
+    This function handles the complete training pipeline including model creation/loading,
+    dataset preparation, checkpoint management, and training execution with monitoring callbacks.
+    Args:
+        args: ArgumentParser namespace containing training configuration including:
+            - model_dir (str): Directory to save model checkpoints
+            - gene_list (str): Name of gene list to use from GENE_LISTS
+            - prune (bool): Whether to prune the dataset
+            - neighbors (int): Number of neighbors for spatial graph construction
+            - cancer_only (bool): Whether to use only cancer samples
+            - tag (str): Model architecture specification in format 'kernel-patch-depth1-depth2-depth3-heads-channel'
+            - learning_rate (float): Learning rate for optimization
+            - dropout (float): Dropout rate
+            - zinb (bool): Whether to use zero-inflated negative binomial loss
+            - nb (bool): Whether to use negative binomial loss
+            - bake (bool): Baking parameter for model
+            - lamb (float): Lambda parameter for regularization
+            - dataset (str): Name of the dataset being used
+            - num_workers (int): Number of data loading workers
+            - epochs (int): Maximum number of training epochs
+            - strategy (str): PyTorch Lightning training strategy
+            - precision (str): Training precision (e.g., '16-mixed', '32')
+            - checkpoint_dir (str): Directory to save final model
+        vit_dataset (class, optional): Dataset class to use. Defaults to ViT_HEST1K.
+    Returns:
+        None: The function saves trained models and logs but doesn't return values.
+    Raises:
+        ValueError: If checkpoint directory cannot be created or is not writable.
+    Notes:
+        - Automatically resumes training from the latest checkpoint if available
+        - Uses comprehensive monitoring including GPU memory, timing, and OOM handling
+        - Saves model checkpoints every epoch and maintains the best model
+        - Implements early stopping based on validation loss with 25 epoch patience
+        - Creates CSV logs for training metrics tracking
+        - Copies best model to final checkpoint directory upon completion
+    """
+    
     print('#'*50)
     print("CHECKPOINT MANAGEMENT:")
     modelsave_address = args.model_dir
@@ -314,8 +422,8 @@ def train(args, vit_dataset=ViT_HEST1K):
     )
     
     devices = torch.cuda.device_count() if torch.cuda.is_available() else None
-    memory_monitor = GPUMemoryMonitorCallback(log_every_n_batches=10)
-    cache_cleaner = ClearCacheCallback(clear_every_n_batches=5)
+    memory_monitor = GPUMemoryMonitorCallback(log_every_n_batches=20)
+    cache_cleaner = ClearCacheCallback(clear_every_n_batches=2)
     oom_handler = OOMHandlerCallback()
     time_tracker = TimeTrackingCallback()
     
@@ -332,12 +440,13 @@ def train(args, vit_dataset=ViT_HEST1K):
             oom_handler,
             time_tracker
         ],
-        'check_val_every_n_epoch': 5,
+        'check_val_every_n_epoch': 10,
         'enable_progress_bar': False,
-        'log_every_n_steps': 20,
+        'log_every_n_steps': 50,
         'precision': args.precision,
-        'gradient_clip_val': 1.0,
-        'accumulate_grad_batches': 4,
+        'gradient_clip_val': 0.5,
+        'accumulate_grad_batches': 8,
+        'detect_anomaly': False,  # Disable anomaly detection for memory
     }
     if devices is not None:
         trainer_kwargs['devices'] = devices
@@ -345,7 +454,7 @@ def train(args, vit_dataset=ViT_HEST1K):
     trainer = pl.Trainer(**trainer_kwargs)
     
     # This will automatically resume if ckpt_path is provided
-    trainer.fit(model, train_loader, val_loader, ckpt_path=checkpoint_path)
+    trainer.fit(model, train_loader, val_loader, ckpt_path=resume_path)
     
     timing_stats = time_tracker.get_stats()
     if timing_stats:
@@ -366,14 +475,6 @@ def train(args, vit_dataset=ViT_HEST1K):
         print(f"Final model saved to {final_save_path}")
     else:
         print("Warning: No best model checkpoint found")
-    
-    # Save final model
-    os.makedirs(args.checkpoint_dir, exist_ok=True)
-    final_save_path = os.path.join(args.checkpoint_dir, f"Hist2ST_HEST1k_final_{today}.ckpt")
-    # Instead of torch.save(best_model.state_dict(), final_save_path)
-    # Copy the best checkpoint to final location
-    shutil.copy2(best_model_path, final_save_path)
-    print(f"Final model saved to {final_save_path}")
 
 if __name__ == "__main__":
     print(f"Script started on: {date.today().strftime('%Y-%m-%d')}")
@@ -398,7 +499,7 @@ if __name__ == "__main__":
     
     # CUDA setup
     os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
     
     # Check GPU availability
     print(f"CUDA available: {torch.cuda.is_available()}")

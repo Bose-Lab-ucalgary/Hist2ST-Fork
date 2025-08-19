@@ -140,8 +140,8 @@ class Hist2ST(pl.LightningModule):
             tf.RandomHorizontalFlip(0.2),
         ])
     def forward(self, patches, centers, adj, aug=False):
-        if not aug:
-            print(f"Forward pass - training mode: {self.training}")
+        # if not aug:
+        #     print(f"Forward pass - training mode: {self.training}")
         B,N,C,H,W=patches.shape
         patches=patches.reshape(B*N,C,H,W)
         patches = self.patch_embedding(patches)
